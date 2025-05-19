@@ -23,7 +23,7 @@ namespace SANJET.UI.Views.Windows
         {
             if (_viewModel.IsHomeSelected)
             {
-                MainContentFrame.Navigate(new HomePage());
+                //MainContentFrame.Navigate(new HomePage());
             }
         }
 

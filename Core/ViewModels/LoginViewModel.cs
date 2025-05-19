@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
-using SANJET.UI.Views.Windows;
 using System.Windows;
 
 namespace SANJET.Core.ViewModels
@@ -11,7 +10,6 @@ namespace SANJET.Core.ViewModels
     public partial class LoginViewModel : ObservableObject
     {
         private readonly IAuthenticationService _authService;
-        private readonly Window _window;
 
         [ObservableProperty]
         private string _username;
@@ -22,10 +20,9 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private string _errorMessage;
 
-        public LoginViewModel(IAuthenticationService authService, Window window)
+        public LoginViewModel(IAuthenticationService authService)
         {
             _authService = authService;
-            _window = window;
             Username = string.Empty;
             Password = string.Empty;
             ErrorMessage = string.Empty;
@@ -34,20 +31,11 @@ namespace SANJET.Core.ViewModels
         [RelayCommand]
         private async Task Login()
         {
-            if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
-            {
-                ErrorMessage = "請輸入用戶名和密碼";
-                return;
-            }
-
             var user = await _authService.GetUserWithPermissionsAsync(Username, Password);
             if (user != null)
             {
-                _window.DialogResult = true;
-                _window.Close();
-
-                var mainWindow = new MainWindow(App.Host.Services.GetRequiredService<MainViewModel>());
-                mainWindow.Show();
+                ErrorMessage = string.Empty;
+                OnLoginSuccess?.Invoke(this, EventArgs.Empty); // 觸發事件通知視窗關閉
             }
             else
             {
@@ -58,8 +46,10 @@ namespace SANJET.Core.ViewModels
         [RelayCommand]
         private void Cancel()
         {
-            _window.DialogResult = false;
-            _window.Close();
+            OnCancel?.Invoke(this, EventArgs.Empty); // 觸發事件通知視窗關閉
         }
+
+        public event EventHandler OnLoginSuccess; // 登入成功事件
+        public event EventHandler OnCancel;       // 取消事件
     }
 }

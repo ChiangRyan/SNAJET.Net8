@@ -6,13 +6,17 @@ namespace SANJET.UI.Views.Windows
 {
     public partial class LoginWindow : Window
     {
-        private readonly LoginViewModel _viewModel; // 單一定義
+        private readonly LoginViewModel _viewModel;
 
         public LoginWindow(LoginViewModel viewModel)
         {
             InitializeComponent();
-            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel)); // 單一初始化
+            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             DataContext = _viewModel;
+
+            // 訂閱事件
+            _viewModel.OnLoginSuccess += (s, e) => { DialogResult = true; Close(); };
+            _viewModel.OnCancel += (s, e) => { DialogResult = false; Close(); };
         }
 
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)

@@ -21,6 +21,8 @@ namespace SANJET
         {
             try
             {
+                SQLitePCL.Batteries.Init(); // 確保 SQLite 初始化
+
                 Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
                     .ConfigureServices((context, services) =>
                     {
@@ -28,19 +30,9 @@ namespace SANJET
                             options.UseSqlite("Data Source=sanjet.db"));
 
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
-                        services.AddScoped<MainViewModel>(provider =>
-                        {
-                            var frame = (Frame)provider.GetRequiredService<MainWindow>().FindName("MainContentFrame");
-                            return new MainViewModel(
-                                provider.GetRequiredService<IAuthenticationService>(),
-                                frame
-                            );
-                        });
+                        services.AddScoped<MainViewModel>();
                         services.AddScoped<LoginViewModel>();
-                        services.AddTransient<LoginWindow>(provider =>
-                        {
-                            return new LoginWindow(provider.GetRequiredService<LoginViewModel>());
-                        });
+                        services.AddTransient<LoginWindow>(); // 改為 Transient，因為每個登入視窗應是新的實例
                         services.AddSingleton<MainWindow>();
 
                         services.AddLogging(builder =>
@@ -62,8 +54,21 @@ namespace SANJET
 
                 if (Host != null)
                 {
+                    // 顯示 MainWindow
+                    var mainWindow = Host.Services.GetRequiredService<MainWindow>();
+                    mainWindow.Show();
+
+                    // 顯示 LoginWindow 作為模態視窗
                     var loginWindow = Host.Services.GetRequiredService<LoginWindow>();
-                    loginWindow.Show();
+                    loginWindow.Owner = mainWindow; // 設定 MainWindow 為 LoginWindow 的擁有者
+                    loginWindow.ShowDialog(); // 使用 ShowDialog 顯示模態視窗
+
+                    // 如果登入失敗，關閉應用程式
+                    if (loginWindow.DialogResult != true)
+                    {
+                        loginWindow.Close();
+                        //Shutdown();
+                    }
                 }
                 else
                 {
@@ -80,7 +85,6 @@ namespace SANJET
 
             base.OnStartup(e);
         }
-
         protected override void OnExit(ExitEventArgs e)
         {
             Host?.StopAsync().GetAwaiter().GetResult();
@@ -92,15 +96,21 @@ namespace SANJET
         {
             try
             {
+                var logger = Host?.Services.GetService<ILogger<App>>();
+                logger?.LogInformation("開始執行 SeedData...");
+
                 dbContext.Database.EnsureCreated();
+                logger?.LogInformation("資料庫已確保創建。");
 
                 if (!dbContext.Users.Any())
                 {
+                    logger?.LogInformation("Users 表為空，開始插入預設資料...");
+
                     var adminUser = new User
                     {
                         Username = "administrator",
                         Password = "sanjet25653819",
-                        Permissions = "ViewHome,ViewManualOperation,ViewMonitor,ViewWarning,ViewSettings,ControlDevice,All"
+                        Permissions = "ViewHome,ControlDevice,All"
                     };
                     var user1 = new User
                     {
@@ -116,14 +126,22 @@ namespace SANJET
                     };
                     dbContext.Users.AddRange(adminUser, user1, user2);
                     dbContext.SaveChanges();
+
+                    logger?.LogInformation("預設使用者已成功插入。");
+                }
+                else
+                {
+                    logger?.LogInformation("Users 表已有資料，跳過插入。");
                 }
             }
             catch (Exception ex)
             {
-                var logger = Host?.Services.GetService<ILogger<App>>() ?? throw new InvalidOperationException("無法獲取日誌服務");
-                logger.LogError(ex, "SeedData 失敗");
-                throw;
+                var logger = Host?.Services.GetService<ILogger<App>>();
+                logger?.LogError(ex, "SeedData 失敗");
+                throw; // 保留異常以便調試
             }
         }
+
+
     }
 }
