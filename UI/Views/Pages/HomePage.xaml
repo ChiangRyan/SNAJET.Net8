@@ -1,0 +1,176 @@
+﻿<Page x:Class="SANJET.UI.Views.Pages.HomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:vm="clr-namespace:SANJET.Core.ViewModels"
+      mc:Ignorable="d"
+      Title="Home" d:DesignHeight="450" d:DesignWidth="800"
+      KeepAlive="True">
+
+    <!-- 定義全局樣式 -->
+    <Page.Resources>
+        <!-- 統一 TextBlock 樣式 -->
+        <Style x:Key="MyTextBlockStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Foreground" Value="Black"/>
+        </Style>
+
+        <!-- 統一 Button 樣式 -->
+        <Style x:Key="MyButtonStyle" TargetType="Button">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="Height" Value="70"/>
+            <Setter Property="Margin" Value="5,0,5,0"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="DarkSlateGray"/>
+        </Style>
+
+        <!-- 紀錄按鈕樣式 -->
+        <Style x:Key="RecordButtonStyle" TargetType="Button" BasedOn="{StaticResource MyButtonStyle}">
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="Height" Value="40"/>
+        </Style>
+
+        <!-- 啟動按鈕樣式 -->
+        <Style x:Key="StartButtonStyle" TargetType="Button" BasedOn="{StaticResource MyButtonStyle}">
+            <Setter Property="Background" Value="#4CAF50"/>
+            <Setter Property="IsEnabled" Value="True"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="運行中">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="通訊失敗">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsOperational}" Value="False">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 停止按鈕樣式 -->
+        <Style x:Key="StopButtonStyle" TargetType="Button" BasedOn="{StaticResource MyButtonStyle}">
+            <Setter Property="Background" Value="#F44336"/>
+            <Setter Property="IsEnabled" Value="True"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="閒置">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="通訊失敗">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsOperational}" Value="False">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 統一 CheckBox 樣式 -->
+        <Style x:Key="MyCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="5,0,0,0"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <!-- 使用 LayoutTransform 整體縮放 -->
+            <Setter Property="LayoutTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="2" ScaleY="2"/>
+                    <!-- 調整縮放比例 -->
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding Devices}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="6"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="5" Padding="10" CornerRadius="8" BorderBrush="Gray" BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#80808080"/>
+                                <!-- Gray with 50% opacity -->
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Status}" Value="閒置">
+                                        <Setter Property="Background" Value="#80D3D3D3"/>
+                                        <!-- LightGray with 50% opacity -->
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="運行中">
+                                        <Setter Property="Background" Value="#8090EE90"/>
+                                        <!-- LightGreen with 50% opacity -->
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="故障">
+                                        <Setter Property="Background" Value="#80F08080"/>
+                                        <!-- LightCoral with 50% opacity -->
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="通訊失敗">
+                                        <Setter Property="Background" Value="#80800080"/>
+                                        <!-- Purple with 50% opacity -->
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <StackPanel>
+                            <!-- 設備是否正常運作的選擇控件 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5" 
+                                Visibility="{
+                                    Binding DataContext.CanControlDevice, 
+                                    RelativeSource={RelativeSource AncestorType=Page}, 
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                                <TextBlock Text="是否啟用:" Style="{StaticResource MyTextBlockStyle}"/>
+                                <CheckBox IsChecked="{Binding IsOperational, UpdateSourceTrigger=PropertyChanged}" 
+                                          Style="{StaticResource MyCheckBoxStyle}"/>
+                            </StackPanel>
+
+                            <!-- 名稱輸入 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="名稱：" Style="{StaticResource MyTextBlockStyle}" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontSize="20" Width="120"/>
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding IpAddress, StringFormat=ESP32 IP：{0}}"/>
+                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding SlaveId, StringFormat=從站 ID：{0}}"/>
+                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding RunCount, StringFormat=跑合：{0}}"/>
+                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding Status, StringFormat=狀態：{0}}" FontWeight="Bold" Foreground="DarkSlateBlue"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Center"
+                                Visibility="{
+                                    Binding DataContext.CanControlDevice, 
+                                    RelativeSource={RelativeSource AncestorType=Page}, 
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Button Content="啟動" 
+                                        x:Name="Start"
+                                        Command="{Binding StartCommand}" 
+                                        Style="{StaticResource StartButtonStyle}"
+                                        />
+                                <Button Content="停止" 
+                                        Command="{Binding StopCommand}" 
+                                        Style="{StaticResource StopButtonStyle}"
+                                        />
+                                
+                            </StackPanel>
+
+                            <!-- 新增紀錄按鈕 -->
+                            <Button Content="紀錄" Command="{Binding RecordCommand}" Style="{StaticResource RecordButtonStyle}" 
+                                    Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</Page>
