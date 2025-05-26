@@ -5,6 +5,7 @@ namespace SANJET.Core.Models
     {
         public int Id { get; set; } // 主鍵
         public string Name { get; set; } = string.Empty;
+        //public string OriginalName { get; set; } = string.Empty; // 用於儲存原始名稱
         public string IpAddress { get; set; } = string.Empty;
         public int SlaveId { get; set; }
         public string Status { get; set; } = "閒置"; // 預設狀態

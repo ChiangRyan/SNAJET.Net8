@@ -35,4 +35,24 @@ namespace SANJET.UI.Converters
         }
     }
 
+    public class BooleanInverterConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue)
+            {
+                return !boolValue;
+            }
+            return DependencyProperty.UnsetValue; // 或者返回 false，取決於您的偏好
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue)
+            {
+                return !boolValue;
+            }
+            return DependencyProperty.UnsetValue; // 或者返回 false
+        }
+    }
 }

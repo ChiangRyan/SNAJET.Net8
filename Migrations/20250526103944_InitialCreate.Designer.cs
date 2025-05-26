@@ -11,7 +11,7 @@ using SANJET.Core;
 namespace SANJET.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250526081012_InitialCreate")]
+    [Migration("20250526103944_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
