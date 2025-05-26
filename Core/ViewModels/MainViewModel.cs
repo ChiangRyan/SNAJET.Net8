@@ -78,15 +78,31 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private bool _canAll;
 
+
         [RelayCommand]
         private void NavigateHome()
         {
             if (_mainContentFrame != null)
             {
                 IsHomeSelected = true;
-                _mainContentFrame.Navigate(new HomePage());
+                var homePage = new HomePage();
+
+                // 如果需要設置 ViewModel
+                if (App.Host != null)
+                {
+                    var homeViewModel = App.Host.Services.GetService<HomeViewModel>();
+                    if (homeViewModel != null)
+                    {
+                        // 更新權限狀態
+                        //homeViewModel.CanControlDevice = CanControlDevice;
+                        homePage.DataContext = homeViewModel;
+                    }
+                }
+
+                _mainContentFrame.Navigate(homePage);
             }
         }
+
 
         [RelayCommand]
         private void Logout()

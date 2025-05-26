@@ -7,6 +7,10 @@ namespace SANJET.UI.Views.Pages
 
     public partial class Settinngs : Page
     {
+        public Settinngs()
+        {
+            InitializeComponent();
 
+        }
     }
 }
