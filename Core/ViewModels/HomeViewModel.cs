@@ -1,10 +1,11 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.EntityFrameworkCore; // 
-using SANJET.Core.Models;          //
+using Microsoft.EntityFrameworkCore; 
+using Microsoft.Extensions.DependencyInjection;
+using SANJET.Core.Models;          
 using System.Collections.ObjectModel;
-using System.Linq;                 // 
-using System.Threading.Tasks;      // 
+
+
 namespace SANJET.Core.ViewModels
 {
     public partial class HomeViewModel : ObservableObject
@@ -30,74 +31,60 @@ namespace SANJET.Core.ViewModels
             var devicesFromDb = await _dbContext.Devices.ToListAsync();
             foreach (var device in devicesFromDb)
             {
-                Devices.Add(new DeviceViewModel
+                var deviceVm = new DeviceViewModel(this) // <--- 傳遞 HomeViewModel 實例
                 {
-                    // Id = device.Id, // 如果 DeviceViewModel 也需要 Id
+                    Id = device.Id, // <--- 儲存 Id
                     Name = device.Name,
                     IpAddress = device.IpAddress,
                     SlaveId = device.SlaveId,
                     Status = device.Status,
                     IsOperational = device.IsOperational,
-                    RunCount = device.RunCount
-                    // 確保 DeviceViewModel 中的屬性與 Device 模型對應
-                });
+                    RunCount = device.RunCount,
+                    OriginalName = device.Name // 初始化 OriginalName
+                };
+                Devices.Add(deviceVm);
             }
         }
 
-        // 示例：保存設備變更的方法 (例如，當名稱或 IsOperational 改變時)
-        // 您可能需要在 DeviceViewModel 中實現屬性變更通知，然後觸發保存
-        [RelayCommand]
-        private async Task SaveDeviceChangesAsync(DeviceViewModel deviceVm)
+        // 實現儲存變更到特定設備的方法
+        public async Task SaveChangesToDeviceAsync(DeviceViewModel deviceVm)
         {
             if (deviceVm == null) return;
 
-            // 假設 DeviceViewModel 有一個 Id 或者可以通過其他唯一標識符找到對應的 Device
-            // 這裡假設我們通過 Name (如果 Name 是唯一的) 或需要一個 Id
-            // 為了簡化，我們假設可以通過某些方式找到或更新 Device
-            // 更完善的做法是 DeviceViewModel 也包含 Id
-
-            var deviceInDb = await _dbContext.Devices.FirstOrDefaultAsync(d => d.Name == deviceVm.Name /* 或 d.Id == deviceVm.Id */);
+            var deviceInDb = await _dbContext.Devices.FindAsync(deviceVm.Id); // 使用 Id 查找
             if (deviceInDb != null)
             {
+                // 只更新需要變更的欄位，此處主要示範名稱
                 deviceInDb.Name = deviceVm.Name;
-                deviceInDb.IpAddress = deviceVm.IpAddress; // 通常 IP 和 SlaveId 不應隨意更改
-                deviceInDb.SlaveId = deviceVm.SlaveId;
-                deviceInDb.Status = deviceVm.Status;
-                deviceInDb.IsOperational = deviceVm.IsOperational;
-                deviceInDb.RunCount = deviceVm.RunCount;
-                
+                // 如果其他屬性也允許在 DeviceViewModel 中直接修改並保存，也一併更新
+                // deviceInDb.IsOperational = deviceVm.IsOperational;
+                // ... 其他屬性 ...
+
                 _dbContext.Devices.Update(deviceInDb);
+                await _dbContext.SaveChangesAsync();
+
+                // 更新成功後，可以考慮更新 deviceVm 的 OriginalName，使其與當前 Name 一致
+                deviceVm.OriginalName = deviceVm.Name;
             }
-            else
-            {
-                // 如果是新設備，則添加到資料庫
-                var newDevice = new Device
-                {
-                    Name = deviceVm.Name,
-                    IpAddress = deviceVm.IpAddress,
-                    SlaveId = deviceVm.SlaveId,
-                    Status = deviceVm.Status,
-                    IsOperational = deviceVm.IsOperational,
-                    RunCount = deviceVm.RunCount
-                };
-                await _dbContext.Devices.AddAsync(newDevice);
-            }
-            await _dbContext.SaveChangesAsync();
+            // 可以加入日誌記錄或錯誤處理
         }
 
-        // 您需要在適當的時機（例如頁面載入時）呼叫 LoadDevicesAsync
-        // 例如，在 MainViewModel 的 NavigateHome 中，獲取 HomeViewModel 後呼叫它
-        // 或者在 HomeViewModel 的建構函數之後異步呼叫
-    }
+        // 原來的 SaveDeviceChangesAsync 可以保留或移除，取決於是否有批量儲存的需求
+        // [RelayCommand]
+        // private async Task SaveDeviceChangesAsync(DeviceViewModel deviceVm) ...
 
-    // 如果 DeviceViewModel 與 Device 結構非常相似，可以考慮重用或繼承
-    // 或者確保它們之間的映射是正確的
-    // public partial class DeviceViewModel : ObservableObject ...
+
+    }
 
 
     // 設備 ViewModel（如果不存在的話）
     public partial class DeviceViewModel : ObservableObject
     {
+        private readonly HomeViewModel _homeViewModel; // 用於回呼儲存操作
+
+        [ObservableProperty]
+        private int id; // 加入 Id 以便於資料庫操作
+
         [ObservableProperty]
         private string name = string.Empty;
 
@@ -116,6 +103,48 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private int runCount;
 
+        [ObservableProperty]
+        private bool isEditingName = false; // 控制是否處於名稱編輯模式
+
+
+        // 建構函數，接收 HomeViewModel 實例
+        public DeviceViewModel(HomeViewModel homeViewModel)
+        {
+            _homeViewModel = homeViewModel;
+        }
+
+        public DeviceViewModel() // 保留一個無參數建構函數，如果某些地方直接創建實例
+        {
+            // 如果直接創建，則 _homeViewModel 會是 null，需要注意 SaveNameCommand 的處理
+            _homeViewModel = App.Host?.Services.GetService<HomeViewModel>()!; // 嘗試獲取，但這不是最佳實踐
+        }
+
+
+        [RelayCommand]
+        private void EditName()
+        {
+            OriginalName = Name; // 保存當前名稱
+            IsEditingName = true;
+        }
+
+        [RelayCommand]
+        private async Task SaveNameAsync()
+        {
+            IsEditingName = false;
+            // 呼叫 HomeViewModel 的方法來儲存到資料庫
+            if (_homeViewModel != null)
+            {
+                await _homeViewModel.SaveChangesToDeviceAsync(this);
+            }
+            // 如果需要，可以在這裡添加一些錯誤處理或成功提示
+        }
+
+        [RelayCommand]
+        private void CancelEditName()
+        {
+            Name = OriginalName; // 恢復原始名稱
+            IsEditingName = false;
+        }
 
         [RelayCommand]
         private void Start()
