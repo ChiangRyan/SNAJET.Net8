@@ -21,10 +21,7 @@ namespace SANJET.UI.Views.Windows
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            if (_viewModel.IsHomeSelected)
-            {
-                MainContentFrame.Navigate(new HomePage());
-            }
+
         }
 
         private void OnNavigated(object sender, NavigationEventArgs e)

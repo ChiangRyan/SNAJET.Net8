@@ -23,15 +23,17 @@ namespace SANJET.Core.ViewModels
         {
             // 這裡應該加載實際的設備數據
             // 暫時添加一些測試數據
-            Devices.Add(new DeviceViewModel
+            for (int i = 0; i < 10; i++)
             {
-                Name = "設備1",
-                IpAddress = "192.168.1.100",
-                SlaveId = 1,
-                Status = "閒置",
-                IsOperational = true
-            });
-            // 添加更多設備...
+                Devices.Add(new DeviceViewModel
+                {
+                    Name = $"設備{i + 1}",
+                    IpAddress = $"192.168.1.{100 + i}",
+                    SlaveId = i + 1,
+                    Status = "閒置",
+                    IsOperational = true
+                });
+            }
         }
     }
 

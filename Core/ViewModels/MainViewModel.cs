@@ -43,11 +43,17 @@ namespace SANJET.Core.ViewModels
                 CanViewHome = false;
                 CanControlDevice = false;
                 CanAll = false;
+                _mainContentFrame?.Navigate(null); // 或者 _mainContentFrame.Content = null;
             }
 
-            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null && _mainContentFrame.Content == null)
+            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null)
             {
-                NavigateHome();
+                // 如果希望每次登入成功且首頁被選中時都刷新/導航到首頁
+                // 或者 _mainContentFrame.Content == null 條件仍然重要，取決於您的設計
+                if (_mainContentFrame.Content == null || !(_mainContentFrame.Content is HomePage)) // 如果當前不是HomePage，也導航
+                {
+                    NavigateHome();
+                }
             }
         }
 
@@ -94,7 +100,7 @@ namespace SANJET.Core.ViewModels
                     if (homeViewModel != null)
                     {
                         // 更新權限狀態
-                        //homeViewModel.CanControlDevice = CanControlDevice;
+                        homeViewModel.CanControlDevice = CanControlDevice;
                         homePage.DataContext = homeViewModel;
                     }
                 }
