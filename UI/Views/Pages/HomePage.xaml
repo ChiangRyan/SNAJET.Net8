@@ -175,7 +175,7 @@
                                     Visibility="{Binding IsEditingName, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
                                     IsEnabled="{Binding DataContext.CanControlDevice, RelativeSource={RelativeSource AncestorType=Page}}"/>
                                 <Button Content="保存" 
-                                    Command="{Binding SaveNameAsyncCommand}" 
+                                    Command="{Binding SaveNameCommand}" 
                                     Style="{StaticResource SaveButtonStyle}" 
                                     Visibility="{Binding IsEditingName, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 <Button Content="取消" 
