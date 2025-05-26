@@ -31,8 +31,10 @@ namespace SANJET
 
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
-                        services.AddScoped<LoginViewModel>();
+
+                        services.AddTransient<LoginViewModel>();// 改為 Transient，因為每個登入視窗應是新的實例
                         services.AddTransient<LoginWindow>();   // 改為 Transient，因為每個登入視窗應是新的實例
+
                         services.AddSingleton<MainWindow>();    // 整個程式只有一個主畫面
 
                         services.AddLogging(builder =>

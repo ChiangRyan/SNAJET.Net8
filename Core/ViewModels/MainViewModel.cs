@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
+using SANJET.Core.Constants.Enums; // <-- 引入 Permission Enum
 using SANJET.Core.Interfaces;
 using SANJET.UI.Views.Pages;
 using SANJET.UI.Views.Windows;
@@ -17,41 +18,48 @@ namespace SANJET.Core.ViewModels
         public MainViewModel(IAuthenticationService authService)
         {
             _authService = authService;
-            CurrentUser = _authService.GetCurrentUser(); // 確保 GetCurrentUser() 的邏輯正確
-            IsLoggedIn = !string.IsNullOrEmpty(CurrentUser); // 基於 CurrentUser 是否為 null 或空來判斷
-            CanViewHome = IsLoggedIn && (CurrentUser == "administrator" || CurrentUser == "admin" || CurrentUser == "user");
-            CanAll = IsLoggedIn && CurrentUser == "administrator";
+            // CurrentUser = _authService.GetCurrentUser()?.Username; // 在 UpdateLoginState 中處理
+            // IsLoggedIn = !string.IsNullOrEmpty(CurrentUser);
+            // CanViewHome = IsLoggedIn && (CurrentUser == "administrator" || CurrentUser == "admin" || CurrentUser == "user");
+            // CanAll = IsLoggedIn && CurrentUser == "administrator";
+            UpdateLoginState(); // 建構時即更新一次狀態
             IsHomeSelected = true; // 預設選中首頁
-
-            // 注意：如果 CurrentUser 為 null，後續依賴 CurrentUser 的邏輯需要處理 null 情況
-            // 例如 _authService.GetCurrentUser() 返回 null 時，IsLoggedIn 等屬性的判斷。
         }
 
         public void UpdateLoginState()
         {
-            CurrentUser = _authService.GetCurrentUser();
-            IsLoggedIn = !string.IsNullOrEmpty(CurrentUser); // <<-- 重新設定 IsLoggedIn
-                                                             // 同步更新其他依賴於登入狀態的屬性
-            CanViewHome = IsLoggedIn && (CurrentUser == "administrator" || CurrentUser == "admin" || CurrentUser == "user");
-            CanAll = IsLoggedIn && CurrentUser == "administrator";
+            var currentUserObject = _authService.GetCurrentUser();
+            CurrentUser = currentUserObject?.Username; // 用於顯示
+            IsLoggedIn = currentUserObject != null;
 
-            // 登入成功後，如果首頁被選中且 Frame 內容為空，則導航到首頁
+            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null)
+            {
+                // 使用 PermissionsList 和 Permission Enum 進行判斷
+                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
+                              currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
+                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+            }
+            else
+            {
+                CanViewHome = false;
+                CanControlDevice = false;
+                CanAll = false;
+            }
+
             if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null && _mainContentFrame.Content == null)
             {
                 NavigateHome();
             }
-            // 或者其他登入成功後需要執行的 UI 更新邏輯
         }
 
-        // 加入 SetMainContentFrame 方法
         public void SetMainContentFrame(Frame frame)
         {
             _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame));
-            // 如果需要在設定 Frame 後立即導航到首頁，可以在這裡處理
-            // 例如，如果 IsHomeSelected 為 true 且 Frame 內容為空
-            if (IsHomeSelected && _mainContentFrame.Content == null)
+            if (IsHomeSelected && _mainContentFrame.Content == null && IsLoggedIn) // 確保登入後才導航
             {
-                NavigateHome(); // 確保 NavigateHome 使用 _mainContentFrame
+                NavigateHome();
             }
         }
 
@@ -68,52 +76,49 @@ namespace SANJET.Core.ViewModels
         private bool _canViewHome;
 
         [ObservableProperty]
+        private bool _canControlDevice; // 新增此屬性，用於控制 "ControlDevice" 權限
+
+        [ObservableProperty]
         private bool _canAll;
 
         [RelayCommand]
         private void NavigateHome()
         {
-            if (_mainContentFrame != null) // 增加 null 檢查
+            if (_mainContentFrame != null)
             {
                 IsHomeSelected = true;
                 _mainContentFrame.Navigate(new HomePage());
             }
         }
 
-
         [RelayCommand]
         private void Logout()
         {
             _authService.Logout();
-            IsLoggedIn = false;
-            CanViewHome = false;
-            CanAll = false;
-            CurrentUser = null;
+            UpdateLoginState(); // 呼叫 UpdateLoginState 來重置所有權限相關狀態
 
-            // 顯示登入視窗
-            // 並且 App.Host 是可用的
-            //if (App.Host != null)
-            //{
-            //    var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>();
-            //    //loginWindow.Show();
-            //}
-
+            // 顯示登入視窗的邏輯 (可選，取決於您的流程)
+            // if (App.Host != null)
+            // {
+            //     ShowLogin(); // 可以直接呼叫 ShowLogin Command
+            // }
         }
 
         [RelayCommand]
         private void ShowLogin()
         {
-            // 確保 App.Host 不為 null 並且可以取得 LoginWindow
             if (App.Host != null)
             {
                 var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>();
-                loginWindow.Owner = Application.Current.MainWindow; // 設定擁有者為當前主視窗
-                bool? result = loginWindow.ShowDialog(); // 顯示登入視窗並等待結果
+                loginWindow.Owner = Application.Current.MainWindow;
+                bool? result = loginWindow.ShowDialog();
 
+                if (result == true) // 登入成功
+                {
+                    UpdateLoginState(); // 登入成功後，再次更新主界面的狀態
+                }
+                // else: 登入失敗或取消，LoginWindow 會自行關閉
             }
-
         }
-
-
     }
 }
