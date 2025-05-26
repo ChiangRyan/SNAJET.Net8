@@ -1,4 +1,5 @@
 ﻿using SANJET.Core.ViewModels;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -15,6 +16,13 @@ namespace SANJET.UI.Views.Windows
             DataContext = _viewModel;
 
             // 訂閱事件
+            // 在 DataContext 設定後，如果 ViewModel 中有預設密碼，手動設定 PasswordBox
+            // 假設您的 PasswordBox 在 XAML 中的 x:Name 是 "UserPasswordBox"
+            if (!string.IsNullOrEmpty(_viewModel.Password))
+            {
+                PasswordBox.Password = _viewModel.Password; // PasswordBox 是 PasswordBox 的 x:Name
+            }
+
             _viewModel.OnLoginSuccess += (s, e) => 
             {
                 if (this.IsLoaded && this.IsActive) // 確保視窗是活動的

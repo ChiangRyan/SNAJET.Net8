@@ -119,12 +119,13 @@ namespace SANJET.Core.ViewModels
         [RelayCommand]
         private async Task SaveNameAsync() // 注意異步方法命名约定
         {
+            IsEditingName = false; // 完成後退出編輯模式
             // 呼叫 HomeViewModel 的方法來儲存到資料庫
             if (_homeViewModel != null)
             {
                 await _homeViewModel.SaveChangesToDeviceAsync(this);
             }
-            IsEditingName = false; // 完成後退出編輯模式
+            
             // 如果需要，可以在這裡添加一些錯誤處理或成功提示
         }
 
