@@ -131,6 +131,23 @@ namespace SANJET
                 {
                     logger?.LogInformation("Users 表已有資料，跳過插入。");
                 }
+
+                // 新增 Devices 種子資料
+                if (!dbContext.Devices.Any())
+                {
+                    logger?.LogInformation("Devices 表為空，開始插入預設設備資料...");
+                    dbContext.Devices.AddRange(
+                        new Device { Name = "預設設備1", IpAddress = "192.168.1.200", SlaveId = 10, Status = "閒置", IsOperational = true, RunCount = 0 },
+                        new Device { Name = "預設設備2", IpAddress = "192.168.1.201", SlaveId = 11, Status = "運行中", IsOperational = true, RunCount = 150 }
+                    );
+                    logger?.LogInformation("預設設備已成功插入。");
+                }
+                else
+                {
+                    logger?.LogInformation("Devices 表已有資料，跳過設備插入。");
+                }
+                dbContext.SaveChanges(); // 統一儲存變更
+
             }
             catch (Exception ex)
             {

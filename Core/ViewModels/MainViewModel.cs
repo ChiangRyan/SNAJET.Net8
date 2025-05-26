@@ -33,7 +33,7 @@ namespace SANJET.Core.ViewModels
                 // 使用 PermissionsList 和 Permission Enum 進行判斷
                 CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
                               currentUserObject.PermissionsList.Contains(Permission.All.ToString());
-                
+
                 CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
                                    currentUserObject.PermissionsList.Contains(Permission.All.ToString());
                 CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());
@@ -52,7 +52,7 @@ namespace SANJET.Core.ViewModels
                 // 或者 _mainContentFrame.Content == null 條件仍然重要，取決於您的設計
                 if (_mainContentFrame.Content == null || !(_mainContentFrame.Content is HomePage)) // 如果當前不是HomePage，也導航
                 {
-                    NavigateHome();
+                    _ = NavigateHomeAsync(); // 使用 discard operator `_` 來忽略未等待的 Task
                 }
             }
         }
@@ -62,7 +62,7 @@ namespace SANJET.Core.ViewModels
             _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame));
             if (IsHomeSelected && _mainContentFrame.Content == null && IsLoggedIn) // 確保登入後才導航
             {
-                NavigateHome();
+                _ = NavigateHomeAsync(); // 使用 discard operator `_` 來忽略未等待的 Task
             }
         }
 
@@ -86,7 +86,7 @@ namespace SANJET.Core.ViewModels
 
 
         [RelayCommand]
-        private void NavigateHome()
+        private async Task NavigateHomeAsync()
         {
             if (_mainContentFrame != null)
             {
@@ -102,6 +102,7 @@ namespace SANJET.Core.ViewModels
                         // 更新權限狀態
                         homeViewModel.CanControlDevice = CanControlDevice;
                         homePage.DataContext = homeViewModel;
+                        await homeViewModel.LoadDevicesAsync();
                     }
                 }
 
