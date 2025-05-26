@@ -26,6 +26,10 @@ namespace SANJET.Core.ViewModels
             Username = string.Empty;
             Password = string.Empty;
             ErrorMessage = string.Empty;
+
+            // Initialize events to avoid nullability warnings
+            OnLoginSuccess = delegate { };
+            OnCancel = delegate { };
         }
 
         [RelayCommand]
@@ -40,6 +44,7 @@ namespace SANJET.Core.ViewModels
             else
             {
                 ErrorMessage = "無效的用戶名或密碼";
+                MessageBox.Show(ErrorMessage, "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

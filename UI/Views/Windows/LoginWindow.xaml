@@ -121,7 +121,7 @@
 
             <StackPanel Grid.Row="1" Margin="0,0,0,20">
                 <TextBlock Text="密碼：" Style="{StaticResource LabelStyle}"/>
-                <PasswordBox x:Name="PasswordBox" PasswordChanged="PasswordBox_PasswordChanged" Height="30">
+                <PasswordBox x:Name="PasswordBox" PasswordChanged="PasswordBox_PasswordChanged">
                     <PasswordBox.InputBindings>
                         <KeyBinding Key="Enter" Command="{Binding LoginCommand}"/>
                     </PasswordBox.InputBindings>

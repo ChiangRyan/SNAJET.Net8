@@ -27,6 +27,22 @@ namespace SANJET.Core.ViewModels
             // 例如 _authService.GetCurrentUser() 返回 null 時，IsLoggedIn 等屬性的判斷。
         }
 
+        public void UpdateLoginState()
+        {
+            CurrentUser = _authService.GetCurrentUser();
+            IsLoggedIn = !string.IsNullOrEmpty(CurrentUser); // <<-- 重新設定 IsLoggedIn
+                                                             // 同步更新其他依賴於登入狀態的屬性
+            CanViewHome = IsLoggedIn && (CurrentUser == "administrator" || CurrentUser == "admin" || CurrentUser == "user");
+            CanAll = IsLoggedIn && CurrentUser == "administrator";
+
+            // 登入成功後，如果首頁被選中且 Frame 內容為空，則導航到首頁
+            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null && _mainContentFrame.Content == null)
+            {
+                NavigateHome();
+            }
+            // 或者其他登入成功後需要執行的 UI 更新邏輯
+        }
+
         // 加入 SetMainContentFrame 方法
         public void SetMainContentFrame(Frame frame)
         {
@@ -75,25 +91,29 @@ namespace SANJET.Core.ViewModels
             CurrentUser = null;
 
             // 顯示登入視窗
-            // 假設 LoginWindow 是通過 DI 獲取的
             // 並且 App.Host 是可用的
+            //if (App.Host != null)
+            //{
+            //    var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>();
+            //    //loginWindow.Show();
+            //}
+
+        }
+
+        [RelayCommand]
+        private void ShowLogin()
+        {
+            // 確保 App.Host 不為 null 並且可以取得 LoginWindow
             if (App.Host != null)
             {
                 var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>();
-                loginWindow.Show();
-            }
+                loginWindow.Owner = Application.Current.MainWindow; // 設定擁有者為當前主視窗
+                bool? result = loginWindow.ShowDialog(); // 顯示登入視窗並等待結果
 
-
-            // 關閉 MainWindow
-            // Application.Current.MainWindow 是 WPF 的一個屬性，它會被設為第一個 Show() 的 Window
-            // 或者可以通過 Application.MainWindow = someWindow; 明確設定
-            // 如果 MainWindow 是當前 Application.Current.MainWindow
-            var currentMainWindow = Application.Current.MainWindow;
-            if (currentMainWindow != null && currentMainWindow is MainWindow) // 確認它是 MainWindow 類型，避免關錯
-            {
-                currentMainWindow.Close();
             }
 
         }
+
+
     }
 }

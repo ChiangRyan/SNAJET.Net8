@@ -32,8 +32,8 @@ namespace SANJET
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<LoginViewModel>();
-                        services.AddTransient<LoginWindow>(); // 改為 Transient，因為每個登入視窗應是新的實例
-                        services.AddSingleton<MainWindow>();
+                        services.AddTransient<LoginWindow>();   // 改為 Transient，因為每個登入視窗應是新的實例
+                        services.AddSingleton<MainWindow>();    // 整個程式只有一個主畫面
 
                         services.AddLogging(builder =>
                         {
@@ -54,25 +54,26 @@ namespace SANJET
 
                 if (Host != null)
                 {
-                    // 顯示 MainWindow
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
                     mainWindow.Show();
 
-                    // 顯示 LoginWindow 作為模態視窗
                     var loginWindow = Host.Services.GetRequiredService<LoginWindow>();
-                    loginWindow.Owner = mainWindow; // 設定 MainWindow 為 LoginWindow 的擁有者
-                    loginWindow.ShowDialog(); // 使用 ShowDialog 顯示模態視窗
+                    loginWindow.Owner = mainWindow;
+                    bool? loginDialogResult = loginWindow.ShowDialog();
 
-                    // 如果登入失敗，關閉應用程式
-                    if (loginWindow.DialogResult != true)
+                    if (loginDialogResult == true) // 登入成功
                     {
-                        loginWindow.Close();
-                        //Shutdown();
+                        // 從 MainWindow 獲取 MainViewModel (或者從 DI 容器中重新解析，取決於 ViewModel 的生命週期管理)
+                        // 假設 MainWindow 的 DataContext 就是 MainViewModel 的實例
+                        if (mainWindow.DataContext is MainViewModel mainViewModel)
+                        {
+                            mainViewModel.UpdateLoginState(); // <<-- 新增一個方法來更新狀態
+                        }
                     }
-                }
-                else
-                {
-                    throw new InvalidOperationException("Host 未正確初始化");
+                    else // 登入失敗或取消
+                    {
+                        loginWindow.Close(); // ShowDialog 會在關閉時自動處理
+                    }
                 }
             }
             catch (Exception ex)
@@ -85,14 +86,8 @@ namespace SANJET
 
             base.OnStartup(e);
         }
-        protected override void OnExit(ExitEventArgs e)
-        {
-            Host?.StopAsync().GetAwaiter().GetResult();
-            Host?.Dispose();
-            base.OnExit(e);
-        }
 
-        private void SeedData(AppDbContext dbContext)
+        private static void SeedData(AppDbContext dbContext)
         {
             try
             {
@@ -141,6 +136,17 @@ namespace SANJET
                 throw; // 保留異常以便調試
             }
         }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            Host?.StopAsync().GetAwaiter().GetResult();
+            Host?.Dispose();
+            base.OnExit(e);
+        }
+
+        //----------------------------------------------------------------//
+
+
 
 
     }
