@@ -18,10 +18,6 @@ namespace SANJET.Core.ViewModels
         public MainViewModel(IAuthenticationService authService)
         {
             _authService = authService;
-            // CurrentUser = _authService.GetCurrentUser()?.Username; // 在 UpdateLoginState 中處理
-            // IsLoggedIn = !string.IsNullOrEmpty(CurrentUser);
-            // CanViewHome = IsLoggedIn && (CurrentUser == "administrator" || CurrentUser == "admin" || CurrentUser == "user");
-            // CanAll = IsLoggedIn && CurrentUser == "administrator";
             UpdateLoginState(); // 建構時即更新一次狀態
             IsHomeSelected = true; // 預設選中首頁
         }
@@ -37,6 +33,7 @@ namespace SANJET.Core.ViewModels
                 // 使用 PermissionsList 和 Permission Enum 進行判斷
                 CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
                               currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                
                 CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
                                    currentUserObject.PermissionsList.Contains(Permission.All.ToString());
                 CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());

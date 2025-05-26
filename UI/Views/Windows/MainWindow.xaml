@@ -93,13 +93,22 @@
                             </Setter>
                         </Style>
                     </Grid.Resources>
-                    <RadioButton Grid.Column="1" x:Name="HomeButton" GroupName="Navigation" 
+                    <RadioButton Grid.Column="1" GroupName="Navigation" 
                                  Style="{StaticResource ToolBarRadioButtonStyle}" 
                                  ToolTip="首頁" Command="{Binding NavigateHomeCommand}" 
                                  Margin="5" IsChecked="{Binding IsHomeSelected}" 
                                  Visibility="{Binding CanViewHome, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Path Fill="White" Stretch="Fill" Width="60" Height="60" Stroke="Transparent" 
                               Data="M 72,83.4219 C 72,58.843795 72,58.843795 68.667743,58.421899 64.653106,57.913606 103.35579,26.666668 108,26.666668 c 4.61444,0 43.34929,31.246449 39.362,31.75236 -3.30251,0.419026 -3.30251,0.419026 -3.66559,24.666668 -0.36308,24.247644 -0.36308,24.247644 -10.24559,24.643744 -12.06194,0.48346 -12.07052,0.47294 -12.09707,-14.832001 -0.0248,-14.27798 -3.52501,-19.564103 -12.95451,-19.564103 -10.60987,0 -15.065907,7.085804 -15.065907,23.957176 C 93.333333,108 93.333333,108 82.666667,108 72,108 72,108 72,83.4219 Z"/>
+                    </RadioButton>
+                    
+                    <RadioButton Grid.Column="5" GroupName="Navigation" 
+                                 Style="{StaticResource ToolBarRadioButtonStyle}" 
+                                 ToolTip="設置"
+                                 Margin="5" IsChecked="{Binding IsSettingSelected}" 
+                                 Visibility="{Binding CanViewSettings, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Path Fill="White" Stretch="Fill" Width="60" Height="60" Stroke="Transparent" Data=""/>
+                        
                     </RadioButton>
                 </Grid>
 
