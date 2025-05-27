@@ -5,7 +5,6 @@ using SANJET.Core.Interfaces;
 using System;
 using System.Threading.Tasks;
 
-
 namespace SANJET.Core.Services
 {
     public class MqttBrokerService : IMqttBrokerService, IDisposable
@@ -18,23 +17,23 @@ namespace SANJET.Core.Services
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             var factory = new MqttFactory();
+
+            // 先建立選項
             var options = new MqttServerOptionsBuilder()
                 .WithDefaultEndpoint()
                 .WithDefaultEndpointPort(1883)
                 .Build();
-            _mqttServer = factory.CreateMqttServer(options); // 修正 CS1501：傳入 options
+
+            // 使用選項建立服務器
+            _mqttServer = factory.CreateMqttServer(options);
         }
 
         public async Task StartAsync()
         {
             try
             {
-                var options = new MqttServerOptionsBuilder()
-                    .WithDefaultEndpoint()
-                    .WithDefaultEndpointPort(1883) // 使用預設 MQTT 端口
-                    .Build();
-
-                await _mqttServer.StartAsync(options);
+                // 直接啟動，不需要再傳入參數
+                await _mqttServer.StartAsync();
                 _logger.LogInformation("MQTT Broker 已啟動，監聽於 0.0.0.0:1883");
             }
             catch (Exception ex)

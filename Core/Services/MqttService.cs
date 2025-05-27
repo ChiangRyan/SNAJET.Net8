@@ -12,11 +12,6 @@ using MQTTnet.Client;
 
 namespace SANJET.Core.Services
 {
-    public interface IMqttService
-    {
-        Task ConnectAsync();
-        Task PublishAsync(string topic, string payload);
-    }
 
     public class MqttService : IMqttService
     {

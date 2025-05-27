@@ -16,6 +16,7 @@ namespace SANJET
     public partial class App : Application
     {
         public static IHost? Host { get; private set; }
+        private IMqttBrokerService? _mqttBrokerService;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -26,7 +27,7 @@ namespace SANJET
                 Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
                     .ConfigureServices((context, services) =>
                     {
-                        // Logger (可以替換為 Serilog, NLog 等)
+                        // Logger
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
 
                         services.AddDbContext<AppDbContext>(options =>
@@ -36,11 +37,12 @@ namespace SANJET
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
 
-                        services.AddTransient<LoginViewModel>();// 改為 Transient，因為每個登入視窗應是新的實例
-                        services.AddTransient<LoginWindow>();   // 改為 Transient，因為每個登入視窗應是新的實例
+                        services.AddTransient<LoginViewModel>();
+                        services.AddTransient<LoginWindow>();
 
-                        services.AddSingleton<MainWindow>();    // 整個程式只有一個主畫面
+                        services.AddSingleton<MainWindow>();
 
+                        // 註冊 MQTT 服務
                         services.AddSingleton<IMqttService, MqttService>();
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
 
@@ -53,13 +55,18 @@ namespace SANJET
                     })
                     .Build();
 
+                // 啟動 Host
                 Host.StartAsync().GetAwaiter().GetResult();
 
+                // 初始化資料庫
                 using (var scope = Host.Services.CreateScope())
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     SeedData(dbContext);
                 }
+
+                // 啟動 MQTT Broker
+                StartMqttBrokerAsync().GetAwaiter().GetResult();
 
                 if (Host != null)
                 {
@@ -72,16 +79,14 @@ namespace SANJET
 
                     if (loginDialogResult == true) // 登入成功
                     {
-                        // 從 MainWindow 獲取 MainViewModel (或者從 DI 容器中重新解析，取決於 ViewModel 的生命週期管理)
-                        // 假設 MainWindow 的 DataContext 就是 MainViewModel 的實例
                         if (mainWindow.DataContext is MainViewModel mainViewModel)
                         {
-                            mainViewModel.UpdateLoginState(); // <<-- 新增一個方法來更新狀態
+                            mainViewModel.UpdateLoginState();
                         }
                     }
                     else // 登入失敗或取消
                     {
-                        loginWindow.Close(); // ShowDialog 會在關閉時自動處理
+                        loginWindow.Close();
                     }
                 }
             }
@@ -94,6 +99,30 @@ namespace SANJET
             }
 
             base.OnStartup(e);
+        }
+
+        private async Task StartMqttBrokerAsync()
+        {
+            try
+            {
+                if (Host != null)
+                {
+                    _mqttBrokerService = Host.Services.GetRequiredService<IMqttBrokerService>();
+                    await _mqttBrokerService.StartAsync();
+
+                    var logger = Host.Services.GetService<ILogger<App>>();
+                    logger?.LogInformation("MQTT Broker 啟動成功");
+                }
+            }
+            catch (Exception ex)
+            {
+                var logger = Host?.Services.GetService<ILogger<App>>();
+                logger?.LogError(ex, "啟動 MQTT Broker 失敗");
+
+                // 顯示錯誤但不終止程式
+                MessageBox.Show($"MQTT Broker 啟動失敗：{ex.Message}\n程式將繼續運行，但 MQTT 功能可能無法使用。",
+                    "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private static void SeedData(AppDbContext dbContext)
@@ -152,28 +181,40 @@ namespace SANJET
                 {
                     logger?.LogInformation("Devices 表已有資料，跳過設備插入。");
                 }
-                dbContext.SaveChanges(); // 統一儲存變更
+                dbContext.SaveChanges();
 
             }
             catch (Exception ex)
             {
                 var logger = Host?.Services.GetService<ILogger<App>>();
                 logger?.LogError(ex, "SeedData 失敗");
-                throw; // 保留異常以便調試
+                throw;
             }
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
-            Host?.StopAsync().GetAwaiter().GetResult();
-            Host?.Dispose();
-            base.OnExit(e);
+            try
+            {
+                // 先停止 MQTT Broker
+                if (_mqttBrokerService != null)
+                {
+                    _mqttBrokerService.StopAsync().GetAwaiter().GetResult();
+                    var logger = Host?.Services.GetService<ILogger<App>>();
+                    logger?.LogInformation("MQTT Broker 已停止");
+                }
+            }
+            catch (Exception ex)
+            {
+                var logger = Host?.Services.GetService<ILogger<App>>();
+                logger?.LogError(ex, "停止 MQTT Broker 時發生錯誤");
+            }
+            finally
+            {
+                Host?.StopAsync().GetAwaiter().GetResult();
+                Host?.Dispose();
+                base.OnExit(e);
+            }
         }
-
-        //----------------------------------------------------------------//
-
-
-
-
     }
 }
