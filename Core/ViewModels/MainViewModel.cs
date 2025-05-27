@@ -1,70 +1,26 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
-using SANJET.Core.Constants.Enums; // <-- 引入 Permission Enum
+using Microsoft.Extensions.Logging;
+using SANJET.Core.Constants.Enums;
 using SANJET.Core.Interfaces;
 using SANJET.UI.Views.Pages;
 using SANJET.UI.Views.Windows;
 using System.Windows;
 using System.Windows.Controls;
+using System.Threading.Tasks;
 
 namespace SANJET.Core.ViewModels
 {
     public partial class MainViewModel : ObservableObject
     {
         private readonly IAuthenticationService _authService;
+        private readonly IMqttService _mqttService; // 注入 MQTT 服務
+        private readonly ILogger<MainViewModel> _logger; // 修改為 MainViewModel 的 ILogger
         private Frame? _mainContentFrame;
 
-        public MainViewModel(IAuthenticationService authService)
-        {
-            _authService = authService;
-            UpdateLoginState(); // 建構時即更新一次狀態
-            IsHomeSelected = true; // 預設選中首頁
-        }
-
-        public void UpdateLoginState()
-        {
-            var currentUserObject = _authService.GetCurrentUser();
-            CurrentUser = currentUserObject?.Username; // 用於顯示
-            IsLoggedIn = currentUserObject != null;
-
-            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null)
-            {
-                // 使用 PermissionsList 和 Permission Enum 進行判斷
-                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
-                              currentUserObject.PermissionsList.Contains(Permission.All.ToString());
-
-                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
-                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString());
-                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());
-            }
-            else
-            {
-                CanViewHome = false;
-                CanControlDevice = false;
-                CanAll = false;
-                _mainContentFrame?.Navigate(null); // 或者 _mainContentFrame.Content = null;
-            }
-
-            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null)
-            {
-                // 如果希望每次登入成功且首頁被選中時都刷新/導航到首頁
-                // 或者 _mainContentFrame.Content == null 條件仍然重要，取決於您的設計
-                if (_mainContentFrame.Content == null || !(_mainContentFrame.Content is HomePage)) // 如果當前不是HomePage，也導航
-                {
-                    _ = NavigateHomeAsync(); // 使用 discard operator `_` 來忽略未等待的 Task
-                }
-            }
-        }
-
-        public void SetMainContentFrame(Frame frame)
-        {
-            _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame));
-            if (IsHomeSelected && _mainContentFrame.Content == null && IsLoggedIn) // 確保登入後才導航
-            {
-                _ = NavigateHomeAsync(); // 使用 discard operator `_` 來忽略未等待的 Task
-            }
-        }
+        [ObservableProperty]
+        private bool _isLedOn;
 
         [ObservableProperty]
         private string? _currentUser;
@@ -79,11 +35,99 @@ namespace SANJET.Core.ViewModels
         private bool _canViewHome;
 
         [ObservableProperty]
-        private bool _canControlDevice; // 新增此屬性，用於控制 "ControlDevice" 權限
+        private bool _canControlDevice;
 
         [ObservableProperty]
         private bool _canAll;
 
+        public MainViewModel(IAuthenticationService authService, IMqttService mqttService, ILogger<MainViewModel> logger)
+        {
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _mqttService = mqttService ?? throw new ArgumentNullException(nameof(mqttService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            UpdateLoginState(); // 建構時更新登入狀態
+            IsHomeSelected = true; // 預設選中首頁
+            _ = InitializeAsync(); // 初始化 MQTT 連線
+        }
+
+        private async Task InitializeAsync()
+        {
+            try
+            {
+                await _mqttService.ConnectAsync();
+                _logger.LogInformation("MQTT 連線成功");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "MQTT 連線失敗");
+                MessageBox.Show("無法連接到 MQTT Broker，請檢查網路設置。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        private async Task ToggleLed()
+        {
+            if (!CanControlDevice)
+            {
+                _logger.LogWarning("無權限控制設備，當前用戶: {CurrentUser}", CurrentUser);
+                MessageBox.Show("您沒有權限控制設備！", "權限錯誤", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                IsLedOn = !IsLedOn;
+                var payload = IsLedOn ? "ON" : "OFF";
+                await _mqttService.PublishAsync("esp32/led/control", payload);
+                _logger.LogInformation("LED 狀態已切換為 {State}", payload);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "發送 MQTT 訊息失敗");
+                MessageBox.Show("無法控制 LED，請檢查 MQTT 連線。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        public void UpdateLoginState()
+        {
+            var currentUserObject = _authService.GetCurrentUser();
+            CurrentUser = currentUserObject?.Username;
+            IsLoggedIn = currentUserObject != null;
+
+            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null)
+            {
+                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
+                              currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
+                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+            }
+            else
+            {
+                CanViewHome = false;
+                CanControlDevice = false;
+                CanAll = false;
+                _mainContentFrame?.Navigate(null);
+            }
+
+            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null)
+            {
+                if (_mainContentFrame.Content == null || !(_mainContentFrame.Content is HomePage))
+                {
+                    _ = NavigateHomeAsync();
+                }
+            }
+        }
+
+        public void SetMainContentFrame(Frame frame)
+        {
+            _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame));
+            if (IsHomeSelected && _mainContentFrame.Content == null && IsLoggedIn)
+            {
+                _ = NavigateHomeAsync();
+            }
+        }
 
         [RelayCommand]
         private async Task NavigateHomeAsync()
@@ -93,13 +137,11 @@ namespace SANJET.Core.ViewModels
                 IsHomeSelected = true;
                 var homePage = new HomePage();
 
-                // 如果需要設置 ViewModel
                 if (App.Host != null)
                 {
                     var homeViewModel = App.Host.Services.GetService<HomeViewModel>();
                     if (homeViewModel != null)
                     {
-                        // 更新權限狀態
                         homeViewModel.CanControlDevice = CanControlDevice;
                         homePage.DataContext = homeViewModel;
                         await homeViewModel.LoadDevicesAsync();
@@ -110,18 +152,11 @@ namespace SANJET.Core.ViewModels
             }
         }
 
-
         [RelayCommand]
         private void Logout()
         {
             _authService.Logout();
-            UpdateLoginState(); // 呼叫 UpdateLoginState 來重置所有權限相關狀態
-
-            // 顯示登入視窗的邏輯 (可選，取決於您的流程)
-            // if (App.Host != null)
-            // {
-            //     ShowLogin(); // 可以直接呼叫 ShowLogin Command
-            // }
+            UpdateLoginState();
         }
 
         [RelayCommand]
@@ -133,11 +168,10 @@ namespace SANJET.Core.ViewModels
                 loginWindow.Owner = Application.Current.MainWindow;
                 bool? result = loginWindow.ShowDialog();
 
-                if (result == true) // 登入成功
+                if (result == true)
                 {
-                    UpdateLoginState(); // 登入成功後，再次更新主界面的狀態
+                    UpdateLoginState();
                 }
-                // else: 登入失敗或取消，LoginWindow 會自行關閉
             }
         }
     }

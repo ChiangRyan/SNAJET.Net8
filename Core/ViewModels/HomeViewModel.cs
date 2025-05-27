@@ -3,8 +3,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection; // 確保這個 using 被添加
+using SANJET.Core.Interfaces;
 using System.Collections.ObjectModel;
-
+using System.Text.Json; // 用於序列化和反序列化 JSON
+using Microsoft.Extensions.Logging;
 
 namespace SANJET.Core.ViewModels
 {
@@ -153,5 +155,6 @@ namespace SANJET.Core.ViewModels
         {
             // 記錄邏輯
         }
+
     }
 }

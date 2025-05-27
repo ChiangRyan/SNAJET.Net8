@@ -203,6 +203,9 @@
                     Height="30"
                     VerticalAlignment="Center"
                     Visibility="{Binding CanAll, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+            <TextBlock Text="{Binding IsLedOn, StringFormat='LED 状态: {0}'}" Margin="0,0,0,40"/>
+            <Button Content="切换 LED" Command="{Binding ToggleLedCommand}" Width="100" Margin="50,0,0,0"/>
         </StackPanel>
 
         <!-- 主內容區域 -->

@@ -26,6 +26,9 @@ namespace SANJET
                 Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
                     .ConfigureServices((context, services) =>
                     {
+                        // Logger (可以替換為 Serilog, NLog 等)
+                        services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
+
                         services.AddDbContext<AppDbContext>(options =>
                             options.UseSqlite("Data Source=sanjet.db"));
 
@@ -37,6 +40,9 @@ namespace SANJET
                         services.AddTransient<LoginWindow>();   // 改為 Transient，因為每個登入視窗應是新的實例
 
                         services.AddSingleton<MainWindow>();    // 整個程式只有一個主畫面
+
+                        services.AddSingleton<IMqttService, MqttService>();
+                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
 
                         services.AddLogging(builder =>
                         {

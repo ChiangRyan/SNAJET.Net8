@@ -16,7 +16,7 @@ namespace SANJET.UI.Views.Windows
             _viewModel = viewModel;
             _viewModel.SetMainContentFrame(MainContentFrame); // 傳遞 Frame 引用
             DataContext = _viewModel;
-            Loaded += MainWindow_Loaded; // 在載入後設置初始頁面
+            //Loaded += MainWindow_Loaded; // 在載入後設置初始頁面
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
