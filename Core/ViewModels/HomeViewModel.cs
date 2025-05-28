@@ -2,159 +2,305 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection; // 確保這個 using 被添加
-using SANJET.Core.Interfaces;
-using System.Collections.ObjectModel;
-using System.Text.Json; // 用於序列化和反序列化 JSON
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SANJET.Core.Interfaces; // 假設 MainViewModel 會透過此方式或 DI 取得
+using System; // For DateTime
+using System.Collections.ObjectModel;
+using System.Linq; // 確保此 using 存在
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows; // For MessageBox
+using SANJET.UI.Views.Windows; // <<-- 新增此 using 指示詞
 
 namespace SANJET.Core.ViewModels
 {
     public partial class HomeViewModel : ObservableObject
     {
         private readonly AppDbContext _dbContext;
-        public HomeViewModel(AppDbContext dbContext)
+        private readonly ILogger<HomeViewModel> _logger;
+        private readonly MainViewModel? _mainViewModel; // 用於讓 DeviceViewModel 可以呼叫 MainViewModel 的方法
+
+        [ObservableProperty]
+        private ObservableCollection<DeviceViewModel> devices = new(); //
+
+        [ObservableProperty]
+        private bool canControlDevice; //
+
+        public HomeViewModel(AppDbContext dbContext, ILogger<HomeViewModel> logger)
         {
             _dbContext = dbContext;
-            Devices = [];
-            // LoadDevicesAsync(); // 建議在頁面激活或需要時調用
+            _logger = logger;
+            _mainViewModel = App.Host?.Services.GetService<MainViewModel>(); // 獲取 MainViewModel 實例
         }
-
-        [ObservableProperty]
-        private ObservableCollection<DeviceViewModel> devices = [];
-
-        [ObservableProperty]
-        private bool canControlDevice; // 這個屬性來自 MainViewModel，確保在使用前已正確設置
 
         public async Task LoadDevicesAsync()
         {
-            Devices.Clear();
-            var devicesFromDb = await _dbContext.Devices.ToListAsync();
-            foreach (var device in devicesFromDb)
+            Devices.Clear(); //
+            if (_dbContext.Devices == null)
             {
-                var deviceVm = new DeviceViewModel(this) // 傳遞 HomeViewModel 實例
+                _logger.LogWarning("HomeViewModel.LoadDevicesAsync: _dbContext.Devices is null.");
+                return;
+            }
+            var devicesFromDb = await _dbContext.Devices.ToListAsync(); //
+            foreach (var deviceEntity in devicesFromDb)
+            {
+                var deviceVm = new DeviceViewModel(this, _mainViewModel, _logger)
                 {
-                    Id = device.Id,
-                    Name = device.Name,
-                    OriginalName = device.Name, // 初始化 OriginalName
-                    IpAddress = device.IpAddress,
-                    SlaveId = device.SlaveId,
-                    Status = device.Status,
-                    IsOperational = device.IsOperational,
-                    RunCount = device.RunCount,
-                    IsEditingName = false // 初始為非編輯模式
+                    Id = deviceEntity.Id, //
+                    Name = deviceEntity.Name, //
+                    OriginalName = deviceEntity.Name, //
+                    // IpAddress = deviceEntity.IpAddress, // 不再映射 IP Address
+                    SlaveId = deviceEntity.SlaveId, //
+                    Status = deviceEntity.Status, //
+                    IsOperational = deviceEntity.IsOperational, //
+                    RunCount = deviceEntity.RunCount, //
+                    IsEditingName = false, //
+                    ControllingEsp32MqttId = deviceEntity.ControllingEsp32MqttId // 從資料庫實體獲取
                 };
-                Devices.Add(deviceVm);
+
+                if (string.IsNullOrEmpty(deviceVm.ControllingEsp32MqttId))
+                {
+                    _logger.LogWarning("資料庫中的設備 {DeviceName} (ID: {DeviceId}, SlaveID: {SlaveId}) 未設定 ControllingEsp32MqttId，將無法透過 MQTT 控制 Modbus。",
+                                       deviceVm.Name, deviceVm.Id, deviceVm.SlaveId);
+                }
+                Devices.Add(deviceVm); //
             }
         }
 
-        // 實現儲存變更到特定設備的方法
-        public async Task SaveChangesToDeviceAsync(DeviceViewModel deviceVm)
+        public async Task SaveChangesToDeviceAsync(DeviceViewModel deviceVm) //
         {
-            if (deviceVm == null) return;
+            if (deviceVm == null || _dbContext.Devices == null) return;
 
             var deviceInDb = await _dbContext.Devices.FindAsync(deviceVm.Id);
             if (deviceInDb != null)
             {
                 deviceInDb.Name = deviceVm.Name;
-                // 如果有其他屬性也需要通過 DeviceViewModel 修改並保存，在此處更新
-                // deviceInDb.IsOperational = deviceVm.IsOperational;
+                deviceInDb.IsOperational = deviceVm.IsOperational;
+                // 如果 ControllingEsp32MqttId 也可以在 UI 修改並保存，則加入以下
+                // deviceInDb.ControllingEsp32MqttId = deviceVm.ControllingEsp32MqttId;
+                // deviceInDb.SlaveId = deviceVm.SlaveId; // 如果 SlaveId 也可以修改
+
                 _dbContext.Devices.Update(deviceInDb);
                 await _dbContext.SaveChangesAsync();
-                deviceVm.OriginalName = deviceVm.Name; // 更新成功後，同步 OriginalName
+                deviceVm.OriginalName = deviceVm.Name; //
+                _logger.LogInformation("已保存設備 ID {DeviceId} 的變更。", deviceVm.Id);
             }
-            // 可以加入日誌記錄或錯誤處理
+        }
+
+        public void UpdateDeviceStatusFromMqtt(string esp32MqttIdFromResponse, byte slaveIdFromResponse, string newStatusText, string? messageFromResponse)
+        {
+            var deviceToUpdate = Devices.FirstOrDefault(d =>
+                d.ControllingEsp32MqttId == esp32MqttIdFromResponse &&
+                d.SlaveId == slaveIdFromResponse);
+
+            if (deviceToUpdate != null)
+            {
+                string combinedMessage = string.IsNullOrEmpty(messageFromResponse) ? newStatusText : $"{newStatusText}: {messageFromResponse}";
+                if (newStatusText.ToLower().Contains("success") || newStatusText.ToLower().Contains("成功"))
+                {
+                    if (deviceToUpdate.Status.Contains("啟動中")) deviceToUpdate.Status = "運行中";
+                    else if (deviceToUpdate.Status.Contains("停止中")) deviceToUpdate.Status = "閒置";
+                    else deviceToUpdate.Status = $"操作成功 ({messageFromResponse ?? ""})";
+                }
+                else
+                {
+                    deviceToUpdate.Status = $"操作失敗 ({messageFromResponse ?? newStatusText})";
+                }
+                _logger.LogInformation("從 MQTT 更新設備 (ESP32: {Esp32Id}, SlaveID: {SlaveId}) 狀態為: {Status}",
+                                       esp32MqttIdFromResponse, slaveIdFromResponse, deviceToUpdate.Status);
+            }
+            else
+            {
+                _logger.LogWarning("收到來自 ESP32 {Esp32Id} 的 Modbus Slave {SlaveId} 的狀態更新，但在列表中找不到對應項。",
+                                   esp32MqttIdFromResponse, slaveIdFromResponse);
+            }
         }
     }
 
     public partial class DeviceViewModel : ObservableObject
     {
-        private readonly HomeViewModel _homeViewModel; // 用於回呼儲存操作
+        private readonly HomeViewModel? _homeViewModel;
+        private readonly MainViewModel? _mainViewModel;
+        private readonly ILogger? _logger;
 
         [ObservableProperty]
         private int id;
 
         [ObservableProperty]
-        private string name = string.Empty;
+        private string name = string.Empty; //
 
         [ObservableProperty]
-        private string originalName = string.Empty; // 用於取消編輯
+        private string originalName = string.Empty; //
+
+        // [ObservableProperty] // 已移除或註解
+        // private string ipAddress = string.Empty;
 
         [ObservableProperty]
-        private string ipAddress = string.Empty;
+        private int slaveId; //
 
         [ObservableProperty]
-        private int slaveId;
+        [NotifyCanExecuteChangedFor(nameof(StartCommand))] // 當 Status 改變時，通知 StartCommand 的 CanExecute 狀態可能需要重新評估
+        [NotifyCanExecuteChangedFor(nameof(StopCommand))]  // 也通知 StopCommand
+        private string status = "閒置"; //
 
         [ObservableProperty]
-        private string status = "閒置";
+        [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+        [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+        private bool isOperational = true; //
 
         [ObservableProperty]
-        private bool isOperational = true;
+        private int runCount; //
 
         [ObservableProperty]
-        private int runCount;
+        private bool isEditingName = false; //
 
         [ObservableProperty]
-        private bool isEditingName = false; // 控制是否處於名稱編輯模式
+        private string? controllingEsp32MqttId;
 
-        // 建構函數，接收 HomeViewModel 實例
-        public DeviceViewModel(HomeViewModel homeViewModel)
+        // Modbus 命令參數
+        private const ushort MODBUS_CONTROL_REGISTER_ADDRESS = 0; // ESP32 端會加上 Address_Offset
+        private const ushort MODBUS_VALUE_START = 1;
+        private const ushort MODBUS_VALUE_STOP = 0;
+
+        public DeviceViewModel(HomeViewModel homeViewModel, MainViewModel? mainViewModel, ILogger? logger)
         {
             _homeViewModel = homeViewModel;
+            _mainViewModel = mainViewModel;
+            _logger = logger;
         }
 
-        // 無參數構造函數，如果 App.Host 為 null，則 _homeViewModel 可能為 null
         public DeviceViewModel()
         {
-            _homeViewModel = App.Host?.Services.GetService<HomeViewModel>()!;
+            _homeViewModel = App.Host?.Services.GetService<HomeViewModel>(); //
+            _mainViewModel = App.Host?.Services.GetService<MainViewModel>();
+            _logger = App.Host?.Services.GetService<ILogger<DeviceViewModel>>();
         }
 
-
-        [RelayCommand]
-        private void EditName()
+        partial void OnIsOperationalChanged(bool value) //
         {
-            OriginalName = Name; // 保存當前名稱以便取消
-            IsEditingName = true;
-        }
-
-        [RelayCommand]
-        private async Task SaveNameAsync() // 注意異步方法命名约定
-        {
-            IsEditingName = false; // 完成後退出編輯模式
-            // 呼叫 HomeViewModel 的方法來儲存到資料庫
             if (_homeViewModel != null)
             {
-                await _homeViewModel.SaveChangesToDeviceAsync(this);
+                _ = _homeViewModel.SaveChangesToDeviceAsync(this);
             }
-            
-            // 如果需要，可以在這裡添加一些錯誤處理或成功提示
         }
 
         [RelayCommand]
-        private void CancelEditName()
+        private void EditName() //
         {
-            Name = OriginalName; // 恢復原始名稱
-            IsEditingName = false;
+            OriginalName = Name; //
+            IsEditingName = true; //
         }
 
         [RelayCommand]
-        private void Start()
+        private async Task SaveNameAsync() //
         {
-            Status = "運行中";
+            IsEditingName = false; //
+            if (_homeViewModel != null)
+            {
+                await _homeViewModel.SaveChangesToDeviceAsync(this); //
+            }
         }
 
         [RelayCommand]
-        private void Stop()
+        private void CancelEditName() //
         {
-            Status = "閒置";
+            Name = OriginalName; //
+            IsEditingName = false; //
         }
 
+        private bool CanStart()
+        {
+            // 確保 ControllingEsp32MqttId 非空，並且符合 XAML 中 StartButtonStyle 的啟用邏輯
+            return IsOperational &&
+                   !string.IsNullOrEmpty(ControllingEsp32MqttId) &&
+                   (Status == "閒置" || Status.Contains("失敗") || Status.Contains("通訊失敗") || Status.Contains("錯誤") || Status == "操作成功" || Status == "命令執行成功");
+        }
+
+        private bool CanStop()
+        {
+            // 確保 ControllingEsp32MqttId 非空，並且符合 XAML 中 StopButtonStyle 的啟用邏輯
+            return IsOperational &&
+                   !string.IsNullOrEmpty(ControllingEsp32MqttId) &&
+                   (Status == "運行中" || Status.Contains("啟動中"));
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStart))]
+        private async Task StartAsync()
+        {
+            if (_mainViewModel == null || string.IsNullOrEmpty(ControllingEsp32MqttId))
+            {
+                MessageBox.Show("通訊服務或目標 ESP32 ID 未設定。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            if (SlaveId <= 0)
+            {
+                MessageBox.Show("無效的 Slave ID。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            Status = "啟動中...";
+            bool success = await _mainViewModel.SendModbusWriteCommandAsync(
+                ControllingEsp32MqttId,
+                (byte)SlaveId,
+                MODBUS_CONTROL_REGISTER_ADDRESS,
+                MODBUS_VALUE_START);
+
+            if (success)
+            {
+                _logger?.LogInformation("已為 Slave ID {SlaveId} (由 ESP32 {Esp32Id}) 發送啟動命令。", SlaveId, ControllingEsp32MqttId);
+            }
+            else
+            {
+                Status = "啟動命令發送失敗";
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStop))]
+        private async Task StopAsync()
+        {
+            if (_mainViewModel == null || string.IsNullOrEmpty(ControllingEsp32MqttId))
+            {
+                MessageBox.Show("通訊服務或目標 ESP32 ID 未設定。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            if (SlaveId <= 0)
+            {
+                MessageBox.Show("無效的 Slave ID。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            Status = "停止中...";
+            bool success = await _mainViewModel.SendModbusWriteCommandAsync(
+                ControllingEsp32MqttId,
+                (byte)SlaveId,
+                MODBUS_CONTROL_REGISTER_ADDRESS,
+                MODBUS_VALUE_STOP);
+
+            if (success)
+            {
+                _logger?.LogInformation("已為 Slave ID {SlaveId} (由 ESP32 {Esp32Id}) 發送停止命令。", SlaveId, ControllingEsp32MqttId);
+            }
+            else
+            {
+                Status = "停止命令發送失敗";
+            }
+        }
+
+        // RecordCommand 保持原樣或根據需要修改
         [RelayCommand]
-        private void Record()
+        private void Record() //
         {
             // 記錄邏輯
+            _logger?.LogInformation("設備 {Name} (SlaveID: {SlaveId}) 觸發紀錄。", Name, SlaveId);
+            // 實際實現可能需要彈出一個新視窗或導航到記錄頁面，並傳遞此 DeviceViewModel 的資訊
+            // 例如，可以透過 _mainViewModel 或一個導航服務來處理
+            if (App.Host?.Services.GetService<RecordView>() is RecordView recordView)
+            {
+                // recordView.DataContext = new RecordViewModel(this); // 假設您有一個 RecordViewModel
+                recordView.Owner = Application.Current.MainWindow;
+                recordView.ShowDialog();
+            }
         }
-
     }
 }

@@ -34,14 +34,18 @@ namespace SANJET
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
+
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
+                        services.AddTransient<RecordView>();
+
                         services.AddSingleton<MainWindow>();
                         services.AddSingleton<IMqttService, MqttService>();
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); // 已存在
 
                         // 註冊新的背景服務
                         services.AddHostedService<MqttClientConnectionService>();
+                        services.AddHostedService<ModbusPollingService>();
 
                         services.AddLogging(builder =>
                         {
@@ -163,8 +167,8 @@ namespace SANJET
                 {
                     logger?.LogInformation("Devices 表為空，開始插入預設設備資料...");
                     dbContext.Devices.AddRange(
-                        new Device { Name = "預設設備1", IpAddress = "192.168.1.200", SlaveId = 10, Status = "閒置", IsOperational = true, RunCount = 0 },
-                        new Device { Name = "預設設備2", IpAddress = "192.168.1.201", SlaveId = 11, Status = "運行中", IsOperational = true, RunCount = 150 }
+                        new Device { Name = "預設設備1", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 1, Status = "閒置", IsOperational = true, RunCount = 0 },
+                        new Device { Name = "預設設備2", ControllingEsp32MqttId = "ESP32_MdTCP", SlaveId = 1, Status = "運行中", IsOperational = true, RunCount = 150 }
                     );
                     logger?.LogInformation("預設設備已成功插入。");
                 }

@@ -183,8 +183,8 @@
                                     Style="{StaticResource CancelButtonStyle}" 
                                     Visibility="{Binding IsEditingName, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                             </StackPanel>
-                            
-                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding IpAddress, StringFormat=ESP32 IP：{0}}"/>
+
+                            <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding ControllingEsp32MqttId, StringFormat=ESP32 ID：{0}}"/>
                             <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding SlaveId, StringFormat=從站 ID：{0}}"/>
                             <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding RunCount, StringFormat=跑合：{0}}"/>
                             <TextBlock Style="{StaticResource MyTextBlockStyle}" Text="{Binding Status, StringFormat=狀態：{0}}" FontWeight="Bold" Foreground="DarkSlateBlue"/>

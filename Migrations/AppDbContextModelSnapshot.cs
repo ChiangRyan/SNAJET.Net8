@@ -15,7 +15,7 @@ namespace SANJET.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.5");
 
             modelBuilder.Entity("SANJET.Core.Models.Device", b =>
                 {
@@ -23,7 +23,7 @@ namespace SANJET.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("IpAddress")
+                    b.Property<string>("ControllingEsp32MqttId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -66,7 +66,7 @@ namespace SANJET.Migrations
                     b.Property<string>("Permissions")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("PermissionsList")
+                    b.PrimitiveCollection<string>("PermissionsList")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

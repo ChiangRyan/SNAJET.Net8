@@ -18,12 +18,12 @@ namespace SANJET.Migrations
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    IpAddress = table.Column<string>(type: "TEXT", nullable: false),
                     SlaveId = table.Column<int>(type: "INTEGER", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     IsOperational = table.Column<bool>(type: "INTEGER", nullable: false),
                     RunCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    Timestamp = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Timestamp = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    ControllingEsp32MqttId = table.Column<string>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
