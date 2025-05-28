@@ -203,10 +203,7 @@
                     Height="30"
                     VerticalAlignment="Center"
                     Visibility="{Binding CanAll, Converter={StaticResource BooleanToVisibilityConverter}}">
-
-            <TextBlock Text="{Binding IsLedOn, StringFormat='LED 状态: {0}'}" Margin="0,0,0,40"/>
-            <Button Content="切换 LED" Command="{Binding ToggleLedCommand}" Width="100"/>
-            
+      
             <StatusBar DockPanel.Dock="Bottom">
                 <StatusBarItem>
                     <TextBlock Text="{Binding Esp32ConnectionStatus}" />
@@ -222,6 +219,24 @@
                 <ColumnDefinition Width="567*"/>
             </Grid.ColumnDefinitions>
             <Frame x:Name="MainContentFrame" NavigationUIVisibility="Hidden" Grid.ColumnSpan="2" Background="Transparent"/>
+            
+            <ListBox ItemsSource="{Binding Esp32Devices}" SelectedItem="{Binding SelectedEsp32Device}" Grid.Column="2" Width="500">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding DeviceId}" Margin="5"/>
+                            <TextBlock Text="{Binding ConnectionStatus}" Margin="5"/>
+                            <TextBlock Text="{Binding IpAddress}" Margin="5"/>
+                            <ToggleButton IsChecked="{Binding IsLedOn}"
+                              Command="{Binding Path=DataContext.ToggleLedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                              CommandParameter="{Binding}"
+                              Content="LED" Margin="5"
+                              IsEnabled="{Binding Path=DataContext.CanControlDevice, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            
         </Grid>
     </Grid>
 </Window>

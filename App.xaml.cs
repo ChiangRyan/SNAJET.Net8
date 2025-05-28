@@ -5,11 +5,12 @@ using Microsoft.Extensions.Logging;
 using SANJET.Core;
 using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
-using SANJET.Core.Services;
+using SANJET.Core.Services; // 確保 MqttClientConnectionService 被引用
 using SANJET.Core.ViewModels;
 using SANJET.UI.Views.Windows;
 using System.Windows;
 using System.Windows.Controls;
+using System.Threading.Tasks; // 新增
 
 namespace SANJET
 {
@@ -18,33 +19,29 @@ namespace SANJET
         public static IHost? Host { get; private set; }
         private IMqttBrokerService? _mqttBrokerService;
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             try
             {
-                SQLitePCL.Batteries.Init(); // 確保 SQLite 初始化
+                SQLitePCL.Batteries.Init();
 
                 Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
                     .ConfigureServices((context, services) =>
                     {
-                        // Logger
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
-
                         services.AddDbContext<AppDbContext>(options =>
                             options.UseSqlite("Data Source=sanjet.db"));
-
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
-
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
-
                         services.AddSingleton<MainWindow>();
-
-                        // 註冊 MQTT 服務
                         services.AddSingleton<IMqttService, MqttService>();
-                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
+                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); // 已存在
+
+                        // 註冊新的背景服務
+                        services.AddHostedService<MqttClientConnectionService>();
 
                         services.AddLogging(builder =>
                         {
@@ -55,19 +52,37 @@ namespace SANJET
                     })
                     .Build();
 
-                // 啟動 Host
-                Host.StartAsync().GetAwaiter().GetResult();
+                var appLogger = Host.Services.GetService<ILogger<App>>();
 
-                // 初始化資料庫
+                // 1. 手動解析並啟動 MQTT Broker 服務 (在 Host.StartAsync() 之前)
+                _mqttBrokerService = Host.Services.GetRequiredService<IMqttBrokerService>();
+                try
+                {
+                    await _mqttBrokerService.StartAsync();
+                    appLogger?.LogInformation("MQTT Broker started successfully before Host.StartAsync().");
+                }
+                catch (Exception brokerEx)
+                {
+                    appLogger?.LogError(brokerEx, "Failed to start MQTT Broker before Host.StartAsync().");
+                    MessageBox.Show($"MQTT Broker 啟動失敗：{brokerEx.Message}\n程式將繼續運行，但 MQTT 功能可能無法使用。",
+                                    "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+
+                // 2. 啟動 Host (這將會啟動 MqttClientConnectionService 等 IHostedService)
+                await Host.StartAsync(); // 從 GetAwaiter().GetResult() 改為 await
+                appLogger?.LogInformation("Application Host started.");
+
+                // 3. 初始化資料庫
                 using (var scope = Host.Services.CreateScope())
                 {
                     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    SeedData(dbContext);
+                    SeedData(dbContext); // SeedData 內若使用 Host.Services.GetService<ILogger<App>>() 則 Host 需已建立
                 }
 
-                // 啟動 MQTT Broker
-                StartMqttBrokerAsync().GetAwaiter().GetResult();
+                // 移除原先手動啟動 MQTT Broker 的邏輯，因為已提前啟動
+                // await StartMqttBrokerAsync().GetAwaiter().GetResult(); // 移除或註解此行
 
+                
                 if (Host != null)
                 {
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
@@ -98,31 +113,7 @@ namespace SANJET
                 Shutdown();
             }
 
-            base.OnStartup(e);
-        }
-
-        private async Task StartMqttBrokerAsync()
-        {
-            try
-            {
-                if (Host != null)
-                {
-                    _mqttBrokerService = Host.Services.GetRequiredService<IMqttBrokerService>();
-                    await _mqttBrokerService.StartAsync();
-
-                    var logger = Host.Services.GetService<ILogger<App>>();
-                    logger?.LogInformation("MQTT Broker 啟動成功");
-                }
-            }
-            catch (Exception ex)
-            {
-                var logger = Host?.Services.GetService<ILogger<App>>();
-                logger?.LogError(ex, "啟動 MQTT Broker 失敗");
-
-                // 顯示錯誤但不終止程式
-                MessageBox.Show($"MQTT Broker 啟動失敗：{ex.Message}\n程式將繼續運行，但 MQTT 功能可能無法使用。",
-                    "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            // base.OnStartup(e); // WPF 的 Application.OnStartup 是 void，若要呼叫 base，async void 可能不適合直接 base.OnStartup
         }
 
         private static void SeedData(AppDbContext dbContext)
