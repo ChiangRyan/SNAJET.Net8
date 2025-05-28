@@ -1,4 +1,4 @@
-﻿// chiangryan/snajet.net8/SNAJET.Net8-8cec974352d783d9832b0a46da16694639d02a11/Core/ViewModels/MainViewModel.cs
+﻿
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore; // 新增，為了 FirstOrDefaultAsync
@@ -97,7 +97,7 @@ namespace SANJET.Core.ViewModels
             _logger = logger;
             _serviceProvider = serviceProvider; // 保存 IServiceProvider
 
-            this.esp32Devices = new ObservableCollection<DeviceStatusViewModel>();
+            this.esp32Devices = [];
 
             UpdateLoginState();
             IsHomeSelected = true;
@@ -227,88 +227,110 @@ namespace SANJET.Core.ViewModels
                             }
                         }
                     }
-                    else if (topic.EndsWith("/modbus/read/response")) //
+                    else if (topic.EndsWith("/modbus/read/response"))
                     {
-                        _logger.LogInformation("收到 Modbus Read Response on topic {Topic}: {Payload}", topic, payloadJson); //
-                        var responseData = JsonSerializer.Deserialize<ModbusReadResponsePayload>(payloadJson); //
+                        _logger.LogInformation("收到 Modbus Read Response on topic {Topic}: {Payload}", topic, payloadJson);
+                        var responseData = JsonSerializer.Deserialize<ModbusReadResponsePayload>(payloadJson);
 
-                        if (responseData != null && responseData.Status?.ToLower() == "success" && responseData.Data != null && !string.IsNullOrEmpty(responseData.DeviceId)) //
+                        if (responseData != null && !string.IsNullOrEmpty(responseData.DeviceId))
                         {
-                            using var scope = _serviceProvider.CreateScope(); // 使用注入的 IServiceProvider
-                            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>(); //
-                            var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d => //
-                                d.ControllingEsp32MqttId == responseData.DeviceId && //
-                                d.SlaveId == responseData.SlaveId); //
-
-                            if (deviceInDb != null) //
+                            if (responseData.Status?.ToLower() == "success" && responseData.Data != null)
                             {
-                                bool changed = false;
-                                if (responseData.Data.Length >= 1)
+                                using var scope = _serviceProvider.CreateScope();
+                                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d =>
+                                    d.ControllingEsp32MqttId == responseData.DeviceId &&
+                                    d.SlaveId == responseData.SlaveId);
+
+                                if (deviceInDb != null)
                                 {
-                                    ushort rawStatus = responseData.Data[0]; //
-                                    string newDeviceStatus = ConvertRawModbusStatusToString(rawStatus); // <<-- 方法定義在下面
-                                    if (deviceInDb.Status != newDeviceStatus)
+                                    bool changed = false;
+                                    // 根據回應中的原始請求位址和數量來判斷是哪個資料
+                                    if (responseData.Address == ModbusPollingService.STATUS_RELATIVE_ADDRESS && responseData.Quantity == 1 && responseData.Data.Length >= 1)
                                     {
-                                        deviceInDb.Status = newDeviceStatus; //
-                                        changed = true;
-                                        _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - Status updated to {Status}", //
-                                                               responseData.DeviceId, responseData.SlaveId, newDeviceStatus);
+                                        ushort rawStatus = responseData.Data[0];
+                                        string newDeviceStatus = ConvertRawModbusStatusToString(rawStatus); // 確保此方法已定義
+                                        if (deviceInDb.Status != newDeviceStatus)
+                                        {
+                                            deviceInDb.Status = newDeviceStatus;
+                                            changed = true;
+                                            _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - Status updated to {Status} from Addr {Addr}",
+                                                                   responseData.DeviceId, responseData.SlaveId, newDeviceStatus, responseData.Address);
+                                        }
+                                    }
+
+                                    else if (responseData.Address == ModbusPollingService.RUNCOUNT_RELATIVE_ADDRESS && responseData.Quantity == 2 && responseData.Data.Length >= 2)
+                                    {
+                                        ushort word0 = responseData.Data[0]; // 假設是 MSW
+                                        ushort word1 = responseData.Data[1]; // 假設是 LSW
+
+                                        // 組合為無符號32位元整數
+                                        uint unsignedRunCount = ((uint)word1 << 16) | word0;
+                                        int newRunCount = (int)unsignedRunCount; // 如果資料庫欄位是 int 且值在 int 範圍內
+
+                                        _logger.LogInformation("RunCount Raw: Data[0]={Word0_Hex} (Dec:{Word0_Dec}), Data[1]={Word1_Hex} (Dec:{Word1_Dec})",
+                                                               word0.ToString("X4"), word0, word1.ToString("X4"), word1);
+                                        _logger.LogInformation("RunCount Combined (MSW first): Unsigned={UnsignedVal}, Signed={SignedVal}",
+                                                               unsignedRunCount, newRunCount);
+
+                                        if (deviceInDb.RunCount != newRunCount)
+                                        {
+                                            deviceInDb.RunCount = newRunCount;
+                                            changed = true;
+                                            _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - RunCount updated to {RunCount}",
+                                                                   responseData.DeviceId, responseData.SlaveId, newRunCount);
+                                        }
+                                    }
+
+                                    if (changed)
+                                    {
+                                        deviceInDb.Timestamp = DateTime.UtcNow; // 更新時間戳
+                                        await dbContext.SaveChangesAsync();
+                                        _logger.LogInformation("成功更新資料庫：ESP32 {Esp32Id}, Slave {SlaveId}", responseData.DeviceId, responseData.SlaveId);
+
+                                        var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>();
+                                        if (homeViewModel != null && responseData.DeviceId != null)
+                                        {
+                                            homeViewModel.UpdateDeviceStatusFromMqtt(
+                                                responseData.DeviceId,
+                                                responseData.SlaveId,
+                                                deviceInDb.Status, // 使用更新後的資料庫狀態
+                                                deviceInDb.RunCount,  // 從資料庫讀取的最新運轉次數
+                                                "資料已從 Modbus 更新"
+                                            );
+                                        }
                                     }
                                 }
-                                if (responseData.Data.Length >= 2) // 假設 RunCount 在第二個數據 (Data[1])
+                                else
                                 {
-                                    int newRunCount = responseData.Data[1];
-                                    if (deviceInDb.RunCount != newRunCount)
-                                    {
-                                        deviceInDb.RunCount = newRunCount; //
-                                        changed = true;
-                                        _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - RunCount updated to {RunCount}", //
-                                                               responseData.DeviceId, responseData.SlaveId, newRunCount);
-                                    }
-                                }
-
-                                if (changed)
-                                {
-                                    await dbContext.SaveChangesAsync(); //
-                                    _logger.LogInformation("成功更新資料庫：ESP32 {Esp32Id}, Slave {SlaveId}", responseData.DeviceId, responseData.SlaveId); //
-
-                                    var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>(); //
-                                    if (homeViewModel != null && responseData.DeviceId != null) // <<-- 添加 responseData.DeviceId != null 檢查
-                                    {
-                                        homeViewModel.UpdateDeviceStatusFromMqtt( //
-                                            responseData.DeviceId, //
-                                            responseData.SlaveId, //
-                                            deviceInDb.Status, //
-                                            "資料已從 Modbus 更新" //
-                                        );
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                _logger.LogWarning("Modbus 讀取回應：在資料庫中找不到 ESP32 {Esp32Id}, Slave {SlaveId}", //
-                                                   responseData.DeviceId, responseData.SlaveId);
-                            }
-                        }
-
-                        else if (responseData != null && responseData.Status?.ToLower() == "error") //
-                        {
-                            _logger.LogError("Modbus 讀取失敗 (ESP32: {Esp32Id}, Slave: {SlaveId}): {Message}", //
-                                             responseData.DeviceId, responseData.SlaveId, responseData.Message);
-                            using var scope = _serviceProvider.CreateScope(); // 使用注入的 IServiceProvider
-                            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>(); //
-                            var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d => //
-                                d.ControllingEsp32MqttId == responseData.DeviceId && //
-                                d.SlaveId == responseData.SlaveId); //
-                            if (deviceInDb != null && deviceInDb.Status != "通訊失敗")
-                            {
-                                deviceInDb.Status = "通訊失敗"; //
-                                await dbContext.SaveChangesAsync(); //
-                                _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - Status set to 通訊失敗 due to read error", //
+                                    _logger.LogWarning("Modbus 讀取回應：在資料庫中找不到 ESP32 {Esp32Id}, Slave {SlaveId}",
                                                        responseData.DeviceId, responseData.SlaveId);
+                                }
+                            }
+                            else if (responseData.Status?.ToLower() == "error")
+                            {
+                                _logger.LogError("Modbus 讀取失敗 (ESP32: {Esp32Id}, Slave: {SlaveId}, Addr: {Addr}, Qty: {Qty}): {Message}",
+                                                 responseData.DeviceId, responseData.SlaveId, responseData.Address, responseData.Quantity, responseData.Message);
+                                // 更新資料庫中對應設備的狀態為 "通訊失敗"
+                                using var scope = _serviceProvider.CreateScope();
+                                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                                var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d =>
+                                    d.ControllingEsp32MqttId == responseData.DeviceId &&
+                                    d.SlaveId == responseData.SlaveId);
+                                if (deviceInDb != null && deviceInDb.Status != "通訊失敗")
+                                {
+                                    deviceInDb.Status = "通訊失敗";
+                                    deviceInDb.Timestamp = DateTime.UtcNow;
+                                    await dbContext.SaveChangesAsync();
+                                    _logger.LogInformation("DB Update: ESP32 {Esp32Id}, Slave {SlaveId} - Status set to 通訊失敗 due to read error",
+                                                           responseData.DeviceId, responseData.SlaveId);
 
-                                var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>(); //
-                                homeViewModel?.UpdateDeviceStatusFromMqtt(responseData.DeviceId, responseData.SlaveId, "通訊失敗", responseData.Message); //
+                                    var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>();
+                                    if (homeViewModel != null && responseData.DeviceId != null)
+                                    {
+                                        homeViewModel.UpdateDeviceStatusFromMqtt(responseData.DeviceId, responseData.SlaveId, "通訊失敗", responseData.Message);
+                                    }
+                                }
                             }
                         }
                     }

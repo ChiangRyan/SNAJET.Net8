@@ -88,7 +88,7 @@ namespace SANJET.Core.ViewModels
             }
         }
 
-        public void UpdateDeviceStatusFromMqtt(string esp32MqttIdFromResponse, byte slaveIdFromResponse, string newStatusText, string? messageFromResponse)
+        public void UpdateDeviceStatusFromMqtt(string esp32MqttIdFromResponse, byte slaveIdFromResponse, string newStatusText, int newRunCount, string? messageFromResponse)
         {
             var deviceToUpdate = Devices.FirstOrDefault(d =>
                 d.ControllingEsp32MqttId == esp32MqttIdFromResponse &&
