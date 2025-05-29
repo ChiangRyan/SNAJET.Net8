@@ -5,11 +5,11 @@ namespace SANJET.Core.Services
 {
     public class PollingStateService : IPollingStateService
     {
-        private bool _isPollingEnabled = false; // 預設為停用
+        private bool _isPollingEnabled = false; // 預設為停用  
 
         public bool IsPollingGloballyEnabled => _isPollingEnabled;
 
-        public event EventHandler PollingStateChanged;
+        public event EventHandler PollingStateChanged = delegate { }; // 初始化為空的委派  
 
         public void SetPollingState(bool isEnabled)
         {
