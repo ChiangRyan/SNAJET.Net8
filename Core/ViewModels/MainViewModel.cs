@@ -222,9 +222,9 @@ namespace SANJET.Core.ViewModels
                                 _logger.LogWarning("Skipping Modbus Write Response handling because MainViewModel is disposed. Topic: {Topic}", topic);
                                 return;
                             }
-                            /*
-                            using var scope = _serviceProvider.CreateScope(); //
-                            var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>(); //
+
+
+                            var homeViewModel = _serviceProvider.GetService<HomeViewModel>();
                             if (homeViewModel != null && responseData.DeviceId != null) //
                             {
                                 _logger.LogDebug("Calling HomeViewModel.UpdateDeviceStatusFromMqtt for Write Response. ESP32: {DeviceId}, Slave: {SlaveId}, Status: {Status}",
@@ -240,7 +240,7 @@ namespace SANJET.Core.ViewModels
                             {
                                 _logger.LogWarning("HomeViewModel not available or DeviceId null in Modbus Write Response. ESP32: {DeviceId}", responseData.DeviceId);
                             }
-                            */
+                            
                         }
                     }
                     else if (topic.EndsWith("/modbus/read/response")) //
@@ -343,9 +343,9 @@ namespace SANJET.Core.ViewModels
                                         dbChanged = true;
                                     }
                                 }
-                                /*
+
                                 // 恢復呼叫 HomeViewModel 更新 UI
-                                var homeViewModel = scope.ServiceProvider.GetService<HomeViewModel>(); //
+                                var homeViewModel = _serviceProvider.GetService<HomeViewModel>();
                                 if (homeViewModel != null) //
                                 {
                                     _logger.LogDebug("Calling HomeViewModel.UpdateDeviceStatusFromMqtt for Read Response. ESP32: {DeviceId}, Slave: {SlaveId}",
@@ -367,7 +367,7 @@ namespace SANJET.Core.ViewModels
                                 {
                                     _logger.LogWarning("HomeViewModel not available for UI update after Modbus Read Response. ESP32: {DeviceId}", responseData.DeviceId);
                                 }
-                                */
+                                
                             }
                         }
                     }
@@ -402,7 +402,7 @@ namespace SANJET.Core.ViewModels
             return null; //
         }
 
-        private string ConvertRawModbusStatusToString(ushort rawStatus) //
+        private static string ConvertRawModbusStatusToString(ushort rawStatus) //
         {
             return rawStatus switch //
             {
@@ -525,34 +525,43 @@ namespace SANJET.Core.ViewModels
             }
         }
         [RelayCommand]
-        private async Task NavigateHomeAsync() //
+        private async Task NavigateHomeAsync()
         {
-            if (_mainContentFrame != null) //
+            if (_mainContentFrame != null)
             {
-                IsHomeSelected = true; //
-                if (!(_mainContentFrame.Content is HomePage)) //
+                IsHomeSelected = true;
+                // 檢查現有的 DataContext 是否已經是正確的 HomeViewModel 實例
+                var existingHomePage = _mainContentFrame.Content as HomePage;
+                var homeViewModelFromScope = _serviceProvider.GetService<HomeViewModel>(); // 從 MainViewModel 的作用域獲取
+
+                if (existingHomePage == null || existingHomePage.DataContext != homeViewModelFromScope)
                 {
-                    var homePage = new HomePage(); //
-                    if (App.Host != null) //
+                    var homePage = new HomePage();
+                    if (homeViewModelFromScope != null)
                     {
-                        var homeViewModel = App.Host.Services.GetService<HomeViewModel>(); //
-                        if (homeViewModel != null) //
-                        {
-                            homeViewModel.CanControlDevice = CanControlDevice; //
-                            homePage.DataContext = homeViewModel; //
-                            await homeViewModel.LoadDevicesAsync(); //
-                        }
+                        homeViewModelFromScope.CanControlDevice = CanControlDevice;
+                        homePage.DataContext = homeViewModelFromScope; // 設定正確的實例
+                        await homeViewModelFromScope.LoadDevicesAsync();
                     }
-                    _mainContentFrame.Navigate(homePage); //
+                    _mainContentFrame.Navigate(homePage);
+                }
+                else if (homeViewModelFromScope != null) // 如果頁面已存在且 DataContext 正確，可能仍需刷新
+                {
+                    homeViewModelFromScope.CanControlDevice = CanControlDevice; // 確保權限正確
+                    await homeViewModelFromScope.LoadDevicesAsync(); // 考慮是否需要重新載入
                 }
             }
         }
+
+
         [RelayCommand]
         private void Logout() //
         {
             _authService.Logout(); //
             UpdateLoginState(); //
         }
+
+
         [RelayCommand]
         private void ShowLogin() //
         {
@@ -569,12 +578,13 @@ namespace SANJET.Core.ViewModels
             }
         }
 
+
+
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-
         protected virtual void Dispose(bool disposing)
         {
             if (!_isDisposed)
@@ -592,5 +602,8 @@ namespace SANJET.Core.ViewModels
                 _isDisposed = true;
             }
         }
+
+
+
     }
 }
