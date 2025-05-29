@@ -75,7 +75,7 @@ namespace SANJET.Core.Services
                                 1, // 讀取1個暫存器 (16-bit) for Status
                                 3  // 功能碼 3 (Read Holding Registers) - 假設狀態是保持暫存器
                             );
-                            await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken); // 請求間延遲
+                            await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken); // 請求間延遲
 
                             if (stoppingToken.IsCancellationRequested) break;
 
@@ -89,7 +89,7 @@ namespace SANJET.Core.Services
                                 2, // 讀取2個連續的暫存器 (16-bit each) for RunCount (32-bit)
                                 3  // 功能碼 3 - 假設 RunCount 也是保持暫存器
                             );
-                            await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken); // 請求間延遲
+                            await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken); // 請求間延遲
                         }
                     }
                 }
