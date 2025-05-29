@@ -21,16 +21,14 @@ namespace SANJET.Core.Services
 
         public const ushort STATUS_RELATIVE_ADDRESS = 1;  // 狀態的相對位址
         public const ushort RUNCOUNT_RELATIVE_ADDRESS = 10; // 運轉次數的起始相對位址
-        private readonly IPollingStateService _pollingStateService; // 新增欄位
-        private readonly ManualResetEventSlim _runPollingSignal = new ManualResetEventSlim(false); // 用於控制輪詢迴圈的啟動/暫停
+
 
         public ModbusPollingService(ILogger<ModbusPollingService> logger,
-                                IServiceProvider serviceProvider,
-                                IPollingStateService pollingStateService) // 
+                                IServiceProvider serviceProvider) // 
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
-            _pollingStateService = pollingStateService; // 
+
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
