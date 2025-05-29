@@ -41,7 +41,8 @@ namespace SANJET
 
                         services.AddSingleton<MainWindow>();
                         services.AddSingleton<IMqttService, MqttService>();
-                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); // 已存在
+                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); 
+                        services.AddSingleton<IPollingStateService, PollingStateService>();
 
                         // 註冊新的背景服務
                         services.AddHostedService<MqttClientConnectionService>();

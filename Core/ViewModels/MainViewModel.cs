@@ -62,6 +62,8 @@ namespace SANJET.Core.ViewModels
         private readonly IMqttService _mqttService; //
         private readonly ILogger<MainViewModel> _logger; //
         private readonly IServiceProvider _serviceProvider; //
+        private readonly IPollingStateService _pollingStateService;
+
         private Frame? _mainContentFrame; //
         private bool _isDisposed = false;
 
@@ -89,12 +91,18 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private DeviceStatusViewModel? selectedEsp32Device; //
 
-        public MainViewModel(IAuthenticationService authService, IMqttService mqttService, ILogger<MainViewModel> logger, IServiceProvider serviceProvider) //
+        public MainViewModel(
+        IAuthenticationService authService,
+        IMqttService mqttService,
+        ILogger<MainViewModel> logger,
+        IServiceProvider serviceProvider,
+        IPollingStateService pollingStateService) // 新增注入
         {
             _authService = authService; //
             _mqttService = mqttService; //
             _logger = logger; //
             _serviceProvider = serviceProvider; //
+            _pollingStateService = pollingStateService; // 
 
             this.esp32Devices = []; //
 
@@ -481,41 +489,10 @@ namespace SANJET.Core.ViewModels
                 return false; //
             }
         }
-        public void UpdateLoginState() //
-        {
-            var currentUserObject = _authService.GetCurrentUser(); //
-            CurrentUser = currentUserObject?.Username; //
-            IsLoggedIn = currentUserObject != null; //
 
-            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null) //
-            {
-                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) || //
-                              currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
-                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) || //
-                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
-                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
-            }
-            else
-            {
-                CanViewHome = false; //
-                CanControlDevice = false; //
-                CanAll = false; //
-                if (Esp32Devices != null) Esp32Devices.Clear(); //
-                _mainContentFrame?.Navigate(null); //
-            }
 
-            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null) //
-            {
-                if (!(_mainContentFrame.Content is HomePage)) //
-                {
-                    _ = NavigateHomeAsync(); //
-                }
-            }
-            else if (!IsLoggedIn && _mainContentFrame != null) //
-            {
-                _mainContentFrame.Navigate(null); //
-            }
-        }
+        
+
         public void SetMainContentFrame(Frame frame) //
         {
             _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame)); //
@@ -524,6 +501,7 @@ namespace SANJET.Core.ViewModels
                 _ = NavigateHomeAsync(); //
             }
         }
+
         [RelayCommand]
         private async Task NavigateHomeAsync()
         {
@@ -553,6 +531,56 @@ namespace SANJET.Core.ViewModels
             }
         }
 
+
+        public void UpdateLoginState() //
+        {
+            var currentUserObject = _authService.GetCurrentUser(); //
+            CurrentUser = currentUserObject?.Username; //
+            IsLoggedIn = currentUserObject != null; //
+
+            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null) //
+            {
+                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) || //
+                              currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
+                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) || //
+                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
+                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
+
+                bool canUserEnablePolling = CanControlDevice || CanAll;
+                _pollingStateService.SetPollingState(canUserEnablePolling);
+                if (canUserEnablePolling)
+                {
+                    _logger.LogInformation("使用者 '{User}' 登入並擁有輪詢權限，輪詢服務將被啟用。", CurrentUser);
+                }
+                else
+                {
+                    _logger.LogInformation("使用者 '{User}' 登入但無輪詢權限，輪詢服務將保持停用。", CurrentUser);
+                    _pollingStateService.SetPollingState(false); // 明確停用
+                }
+            }
+            else
+            {
+                CanViewHome = false; //
+                CanControlDevice = false; //
+                CanAll = false; //
+                Esp32Devices?.Clear(); //
+                _mainContentFrame?.Navigate(null); //
+                _pollingStateService.SetPollingState(false); // 登出時停用輪詢
+                _logger.LogInformation("使用者已登出或未登入，輪詢服務已停用。");
+            }
+
+            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null) //
+            {
+                if (!(_mainContentFrame.Content is HomePage)) //
+                {
+                    _ = NavigateHomeAsync(); //
+                }
+            }
+            else if (!IsLoggedIn && _mainContentFrame != null) //
+            {
+                _mainContentFrame.Navigate(null); //
+            }
+        }
 
         [RelayCommand]
         private void Logout() //
