@@ -34,15 +34,18 @@ namespace SANJET
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
+                        services.AddScoped<SettingsPageViewModel>();
 
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
                         services.AddTransient<RecordView>();
 
+
                         services.AddSingleton<MainWindow>();
                         services.AddSingleton<IMqttService, MqttService>();
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); 
                         services.AddSingleton<IPollingStateService, PollingStateService>();
+                        services.AddSingleton<INavigationService, NavigationService>();
 
                         // 註冊新的背景服務
                         services.AddHostedService<MqttClientConnectionService>();
@@ -152,7 +155,7 @@ namespace SANJET
                     {
                         Username = "administrator",
                         Password = "sanjet25653819",
-                        Permissions = "ViewHome,ControlDevice,All"
+                        Permissions = "ViewHome,ControlDevice,ViewSettings,All"
                     };
                     var user1 = new User
                     {

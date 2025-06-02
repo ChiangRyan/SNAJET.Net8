@@ -4,14 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet.Client; // Potentially for MqttClientOptions, etc. if used directly, though likely through IMqttService
+using SANJET.Core.Constants;
 using SANJET.Core.Constants.Enums; // For Permission enum
 using SANJET.Core.Interfaces;
 using SANJET.Core.Services; // For MqttService concrete type check
-using SANJET.UI.Views.Pages; // For HomePage
+using SANJET.UI.Views.Pages; // For HomePage and Settings page
 using SANJET.UI.Views.Windows; // For LoginWindow
+using System; // 新增
 using System.Collections.ObjectModel;
+using System.Linq; // 新增
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks; // 新增
 using System.Windows;
 using System.Windows.Controls; // For Frame
 
@@ -58,459 +62,436 @@ namespace SANJET.Core.ViewModels
         private readonly IMqttService _mqttService;
         private readonly ILogger<MainViewModel> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IPollingStateService _pollingStateService; // 新增
+        private readonly IPollingStateService _pollingStateService;
+        private readonly INavigationService _navigationService;
 
         private Frame? _mainContentFrame;
+        private bool _isFrameInitialized; // 追蹤 Frame 是否就緒
         private bool _isDisposed = false;
 
         [ObservableProperty]
-        private string? _currentUser; //
+        private string? _currentUser;
 
         [ObservableProperty]
-        private bool _isLoggedIn; //
+        private bool _isLoggedIn;
 
         [ObservableProperty]
-        private bool _isHomeSelected; //
+        private bool _isHomeSelected;
 
         [ObservableProperty]
-        private bool _canViewHome; //
+        private bool _canViewHome;
 
         [ObservableProperty]
-        private bool _isSettingsSelected; // 新增或確認此屬性存在
+        private bool _isSettingsSelected;
 
         [ObservableProperty]
-        private bool _canViewSettings; // 新增或確認此屬性存在，用於控制按鈕可見性
+        private bool _canViewSettings;
 
         [ObservableProperty]
-        private bool _canControlDevice; //
+        private bool _canControlDevice;
 
         [ObservableProperty]
-        private bool _canAll; //
+        private bool _canAll;
 
         [ObservableProperty]
-        private ObservableCollection<DeviceStatusViewModel> esp32Devices; //
+        private ObservableCollection<DeviceStatusViewModel> esp32Devices;
 
         [ObservableProperty]
-        private DeviceStatusViewModel? selectedEsp32Device; //
+        private DeviceStatusViewModel? selectedEsp32Device;
 
         public MainViewModel(
         IAuthenticationService authService,
         IMqttService mqttService,
         ILogger<MainViewModel> logger,
-        IServiceProvider serviceProvider, // 
-        IPollingStateService pollingStateService) // 
+        IServiceProvider serviceProvider,
+        IPollingStateService pollingStateService,
+        INavigationService navigationService)
         {
-            _authService = authService; //
-            _mqttService = mqttService; //
-            _logger = logger; //
-            _serviceProvider = serviceProvider; //
+            _authService = authService;
+            _mqttService = mqttService;
+            _logger = logger;
+            _serviceProvider = serviceProvider;
             _pollingStateService = pollingStateService;
+            _navigationService = navigationService;
 
-            this.esp32Devices = []; //
+            this.esp32Devices = [];
+            _isFrameInitialized = false; // Frame 未初始化
 
-            UpdateLoginState(); //
-            IsHomeSelected = true; //
-            _ = InitializeMqttRelatedTasksAsync(); //
+            UpdateLoginState();
+            // IsHomeSelected = true; // 初始選擇狀態應由 UpdateLoginState 或 NavigateHomeAsync 處理
+            _ = InitializeMqttRelatedTasksAsync();
         }
 
-        private async Task InitializeMqttRelatedTasksAsync() //
+        private async Task InitializeMqttRelatedTasksAsync()
         {
             try
             {
-                _logger.LogInformation("MainViewModel: Assuming MQTT client is being connected/is connected by MqttClientConnectionService."); //
+                _logger.LogInformation("MainViewModel: 假設 MQTT 客戶端正在由 MqttClientConnectionService 連接或已連接。");
 
-                if (_mqttService is MqttService concreteMqttService) //
+                if (_mqttService is MqttService concreteMqttService)
                 {
-                    concreteMqttService.ApplicationMessageReceivedAsync += HandleEsp32MqttMessagesAsync; //
+                    concreteMqttService.ApplicationMessageReceivedAsync += HandleEsp32MqttMessagesAsync;
                 }
                 else
                 {
-                    _logger.LogWarning("MainViewModel: _mqttService 不是 MqttService 型別，無法訂閱訊息事件。"); //
+                    _logger.LogWarning("MainViewModel: _mqttService 不是 MqttService 型別，無法訂閱訊息事件。");
                 }
 
-                await _mqttService.SubscribeAsync("devices/+/status"); //
-                await _mqttService.SubscribeAsync("devices/+/led/status"); //
-                await _mqttService.SubscribeAsync("devices/+/modbus/write/response"); //
-                await _mqttService.SubscribeAsync("devices/+/modbus/read/response"); //
+                await _mqttService.SubscribeAsync("devices/+/status");
+                await _mqttService.SubscribeAsync("devices/+/led/status");
+                await _mqttService.SubscribeAsync("devices/+/modbus/write/response");
+                await _mqttService.SubscribeAsync("devices/+/modbus/read/response");
 
-                _logger.LogInformation("MainViewModel: Subscribed to MQTT topics for multiple devices including Modbus responses."); //
+                _logger.LogInformation("MainViewModel: 已訂閱多個設備的 MQTT 主題，包含 Modbus 回應。");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "MainViewModel: MQTT related task initialization failed (subscriptions, etc.)."); //
+                _logger.LogError(ex, "MainViewModel: MQTT 相關任務初始化失敗 (訂閱等)。");
             }
         }
 
-        private Task HandleEsp32MqttMessagesAsync(MqttApplicationMessageReceivedEventArgs e) //
+        private Task HandleEsp32MqttMessagesAsync(MqttApplicationMessageReceivedEventArgs e)
         {
-            var topic = e.ApplicationMessage.Topic; //
-            var payloadJson = Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment); //
-            _logger.LogDebug("MainViewModel 收到 MQTT: 主題='{Topic}', 内容='{Payload}'", topic, payloadJson); //
+            var topic = e.ApplicationMessage.Topic;
+            var payloadJson = Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment);
+            _logger.LogDebug("MainViewModel 收到 MQTT: 主題='{Topic}', 内容='{Payload}'", topic, payloadJson);
 
-            string? parsedEsp32Id = ParseDeviceIdFromTopic(topic); //
+            string? parsedEsp32Id = ParseDeviceIdFromTopic(topic);
 
-            Application.Current.Dispatcher.Invoke(async () => //
+            Application.Current.Dispatcher.Invoke(async () =>
             {
                 if (_isDisposed)
                 {
-                    _logger.LogWarning("MainViewModel is disposed, skipping MQTT message handling for topic {Topic}.", topic);
+                    _logger.LogWarning("MainViewModel 已釋放，跳過處理主題 {Topic} 的 MQTT 訊息。", topic);
                     return;
                 }
 
                 try
                 {
-                    if (topic.EndsWith("/status")) //
+                    if (topic.EndsWith("/status"))
                     {
-                        if (string.IsNullOrEmpty(parsedEsp32Id)) return; //
+                        if (string.IsNullOrEmpty(parsedEsp32Id)) return;
 
-                        var statusPayload = JsonSerializer.Deserialize<Esp32OnlineStatusPayload>(payloadJson); //
-                        if (statusPayload != null && statusPayload.DeviceId == parsedEsp32Id) //
+                        var statusPayload = JsonSerializer.Deserialize<Esp32OnlineStatusPayload>(payloadJson);
+                        if (statusPayload != null && statusPayload.DeviceId == parsedEsp32Id)
                         {
-                            var deviceVm = Esp32Devices.FirstOrDefault(d => d.DeviceId == parsedEsp32Id); //
+                            var deviceVm = Esp32Devices.FirstOrDefault(d => d.DeviceId == parsedEsp32Id);
                             if (deviceVm == null)
                             {
-                                deviceVm = new DeviceStatusViewModel(parsedEsp32Id); //
-                                Esp32Devices.Add(deviceVm); //
+                                deviceVm = new DeviceStatusViewModel(parsedEsp32Id);
+                                Esp32Devices.Add(deviceVm);
                             }
-                            deviceVm.LastUpdated = DateTime.UtcNow; //
+                            deviceVm.LastUpdated = DateTime.UtcNow;
 
-                            if (statusPayload.Status == "online") //
+                            if (statusPayload.Status == "online")
                             {
-                                deviceVm.ConnectionStatus = "在線"; //
-                                deviceVm.IpAddress = statusPayload.IP; //
-                                _logger.LogInformation("ESP32 設備 {DeviceId} 在線，IP: {IP}", parsedEsp32Id, statusPayload.IP); //
+                                deviceVm.ConnectionStatus = "在線";
+                                deviceVm.IpAddress = statusPayload.IP;
+                                _logger.LogInformation("ESP32 設備 {DeviceId} 在線，IP: {IP}", parsedEsp32Id, statusPayload.IP);
                             }
-                            else if (statusPayload.Status == "offline") //
+                            else if (statusPayload.Status == "offline")
                             {
-                                deviceVm.ConnectionStatus = "離線"; //
-                                deviceVm.IpAddress = null; //
-                                _logger.LogInformation("ESP32 設備 {DeviceId} 離線 (LWT).", parsedEsp32Id); //
+                                deviceVm.ConnectionStatus = "離線";
+                                deviceVm.IpAddress = null;
+                                _logger.LogInformation("ESP32 設備 {DeviceId} 離線 (LWT).", parsedEsp32Id);
                             }
                             else
                             {
-                                deviceVm.ConnectionStatus = statusPayload.Status ?? "狀態未知"; //
+                                deviceVm.ConnectionStatus = statusPayload.Status ?? "狀態未知";
                             }
                         }
                     }
-                    //else if (topic.EndsWith("/led/status")) //
-                    //{
-                    //    if (string.IsNullOrEmpty(parsedEsp32Id)) return; //
-
-                    //    var ledStatus = JsonSerializer.Deserialize<Esp32LedStatusPayload>(payloadJson); //
-                    //    if (ledStatus != null && ledStatus.DeviceId == parsedEsp32Id) //
-                    //    {
-                    //        var deviceVm = Esp32Devices.FirstOrDefault(d => d.DeviceId == parsedEsp32Id); //
-                    //        if (deviceVm == null)
-                    //        {
-                    //            _logger.LogWarning("收到來自未知 ESP32 {DeviceId} 的 LED 狀態，但設備列表不存在。", parsedEsp32Id); //
-                    //            return;
-                    //        }
-
-                    //        _logger.LogInformation("收到 ESP32 設備 {DeviceId} LED 狀態回饋: {Message}", parsedEsp32Id, ledStatus.Message); //
-                    //        if (ledStatus.Status == "success") //
-                    //        {
-                    //            if (!string.IsNullOrEmpty(ledStatus.LedState)) //
-                    //            {
-                    //                deviceVm.IsLedOn = (ledStatus.LedState == "ON"); //
-                    //            }
-                    //        }
-                    //        else
-                    //        {
-                    //            _logger.LogWarning("ESP32 設備 {DeviceId} LED 操作失敗: {Message}", parsedEsp32Id, ledStatus.Message); //
-                    //        }
-                    //    }
-                    //}
-
-                    else if (topic.EndsWith("/modbus/write/response")) //
+                    else if (topic.EndsWith("/modbus/write/response"))
                     {
-                        _logger.LogInformation("收到 Modbus Write Response on topic {Topic}: {Payload}", topic, payloadJson); //
-                        var responseData = JsonSerializer.Deserialize<ModbusWriteResponsePayload>(payloadJson); //
+                        _logger.LogInformation("收到 Modbus Write Response on topic {Topic}: {Payload}", topic, payloadJson);
+                        var responseData = JsonSerializer.Deserialize<ModbusWriteResponsePayload>(payloadJson);
 
-                        if (responseData != null && !string.IsNullOrEmpty(responseData.DeviceId) && responseData.SlaveId > 0) //
+                        if (responseData != null && !string.IsNullOrEmpty(responseData.DeviceId) && responseData.SlaveId > 0)
                         {
                             if (_isDisposed)
                             {
-                                _logger.LogWarning("Skipping Modbus Write Response handling because MainViewModel is disposed. Topic: {Topic}", topic);
+                                _logger.LogWarning("因 MainViewModel 已釋放，跳過處理 Modbus Write Response。主題: {Topic}", topic);
                                 return;
                             }
 
-
                             var homeViewModel = _serviceProvider.GetService<HomeViewModel>();
-                            if (homeViewModel != null && responseData.DeviceId != null) //
+                            if (homeViewModel != null && responseData.DeviceId != null)
                             {
-                                _logger.LogDebug("Calling HomeViewModel.UpdateDeviceStatusFromMqtt for Write Response. ESP32: {DeviceId}, Slave: {SlaveId}, Status: {Status}",
+                                _logger.LogDebug("呼叫 HomeViewModel.UpdateDeviceStatusFromMqtt 以處理 Write Response。ESP32: {DeviceId}, Slave: {SlaveId}, Status: {Status}",
                                                  responseData.DeviceId, responseData.SlaveId, responseData.Status);
-                                homeViewModel.UpdateDeviceStatusFromMqtt( //
-                                    responseData.DeviceId, //
-                                    responseData.SlaveId,  //
-                                    responseData.Status ?? "未知狀態", //
-                                    responseData.Message   //
+                                homeViewModel.UpdateDeviceStatusFromMqtt(
+                                    responseData.DeviceId,
+                                    responseData.SlaveId,
+                                    responseData.Status ?? "未知狀態",
+                                    responseData.Message
                                 );
                             }
                             else
                             {
-                                _logger.LogWarning("HomeViewModel not available or DeviceId null in Modbus Write Response. ESP32: {DeviceId}", responseData.DeviceId);
+                                _logger.LogWarning("HomeViewModel 不可用或 Modbus Write Response 中的 DeviceId 為 null。ESP32: {DeviceId}", responseData.DeviceId);
                             }
-
                         }
                     }
-                    else if (topic.EndsWith("/modbus/read/response")) //
+                    else if (topic.EndsWith("/modbus/read/response"))
                     {
-                        _logger.LogInformation("收到 Modbus Read Response on topic {Topic}: {Payload}", topic, payloadJson); //
-                        var responseData = JsonSerializer.Deserialize<ModbusReadResponsePayload>(payloadJson); //
+                        _logger.LogInformation("收到 Modbus Read Response on topic {Topic}: {Payload}", topic, payloadJson);
+                        var responseData = JsonSerializer.Deserialize<ModbusReadResponsePayload>(payloadJson);
 
-                        if (responseData != null && !string.IsNullOrEmpty(responseData.DeviceId)) //
+                        if (responseData != null && !string.IsNullOrEmpty(responseData.DeviceId))
                         {
                             if (_isDisposed)
                             {
-                                _logger.LogWarning("Skipping Modbus Read Response handling (before scope creation) because MainViewModel is disposed. Topic: {Topic}", topic);
+                                _logger.LogWarning("因 MainViewModel 已釋放 (在創建 scope 之前)，跳過處理 Modbus Read Response。主題: {Topic}", topic);
                                 return;
                             }
 
-                            _logger.LogDebug("Attempting to create scope and DbContext for Modbus Read Response. DeviceId: {DeviceId}, SlaveId: {SlaveId}, Address: {Address}, Quantity: {Quantity}",
+                            _logger.LogDebug("嘗試為 Modbus Read Response 創建 scope 和 DbContext。DeviceId: {DeviceId}, SlaveId: {SlaveId}, Address: {Address}, Quantity: {Quantity}",
                                              responseData.DeviceId, responseData.SlaveId, responseData.Address, responseData.Quantity);
 
-                            using var scope = _serviceProvider.CreateScope(); //
-                            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>(); //
-                            _logger.LogDebug("DbContext obtained for DeviceId: {DeviceId}, SlaveId: {SlaveId}", responseData.DeviceId, responseData.SlaveId);
+                            using var scope = _serviceProvider.CreateScope();
+                            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                            _logger.LogDebug("已獲取 DbContext。DeviceId: {DeviceId}, SlaveId: {SlaveId}", responseData.DeviceId, responseData.SlaveId);
 
-                            var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d => //
-                                d.ControllingEsp32MqttId == responseData.DeviceId && //
-                                d.SlaveId == responseData.SlaveId); //
+                            var deviceInDb = await dbContext.Devices.FirstOrDefaultAsync(d =>
+                                d.ControllingEsp32MqttId == responseData.DeviceId &&
+                                d.SlaveId == responseData.SlaveId);
 
-                            if (deviceInDb == null) //
+                            if (deviceInDb == null)
                             {
-                                _logger.LogWarning("Modbus 讀取回應：在資料庫中找不到 ESP32 {Esp32Id}, Slave {SlaveId}. 無法更新資料庫或 UI。", //
+                                _logger.LogWarning("Modbus 讀取回應：在資料庫中找不到 ESP32 {Esp32Id}, Slave {SlaveId}。無法更新資料庫或 UI。",
                                                    responseData.DeviceId, responseData.SlaveId);
                             }
                             else
                             {
-                                _logger.LogDebug("Device found in DB. ID: {DbId}, Name: {DeviceName}. Current DB Status: '{DbStatus}', RunCount: {DbRunCount}",
+                                _logger.LogDebug("在資料庫中找到設備。ID: {DbId}, 名稱: {DeviceName}。目前資料庫狀態: '{DbStatus}', 運轉次數: {DbRunCount}",
                                                 deviceInDb.Id, deviceInDb.Name, deviceInDb.Status, deviceInDb.RunCount);
                                 bool dbChanged = false;
 
-                                if (responseData.Status?.ToLower() == "success" && responseData.Data != null) //
+                                if (responseData.Status?.ToLower() == "success" && responseData.Data != null)
                                 {
-                                    string originalStatus = deviceInDb.Status; //
-                                    int originalRunCount = deviceInDb.RunCount; //
-
-                                    if (responseData.Address == ModbusPollingService.STATUS_RELATIVE_ADDRESS && responseData.Quantity == 1 && responseData.Data.Length >= 1) //
+                                    if (responseData.Address == ModbusConstants.StatusRelativeAddress && responseData.Quantity == 1 && responseData.Data.Length >= 1)
                                     {
-                                        ushort rawStatus = responseData.Data[0]; //
-                                        string newDeviceStatus = ConvertRawModbusStatusToString(rawStatus); //
-                                        if (deviceInDb.Status != newDeviceStatus) //
+                                        ushort rawStatus = responseData.Data[0];
+                                        string newDeviceStatus = ConvertRawModbusStatusToString(rawStatus);
+                                        if (deviceInDb.Status != newDeviceStatus)
                                         {
-                                            _logger.LogInformation("DB Update (Attempt): ESP32 {Esp32Id}, Slave {SlaveId} - Status changing from '{OldStatus}' to '{NewStatus}' (Raw: {RawStatus}) from Addr {Addr}",
+                                            _logger.LogInformation("資料庫更新 (嘗試): ESP32 {Esp32Id}, Slave {SlaveId} - 狀態從 '{OldStatus}' 變為 '{NewStatus}' (原始值: {RawStatus}) (來自位址 {Addr})",
                                                                    responseData.DeviceId, responseData.SlaveId, deviceInDb.Status, newDeviceStatus, rawStatus, responseData.Address);
-                                            deviceInDb.Status = newDeviceStatus; //
-                                            dbChanged = true; //
+                                            deviceInDb.Status = newDeviceStatus;
+                                            dbChanged = true;
                                         }
                                     }
-                                    else if (responseData.Address == ModbusPollingService.RUNCOUNT_RELATIVE_ADDRESS && responseData.Quantity == 2 && responseData.Data.Length >= 2) //
+                                    else if (responseData.Address == ModbusConstants.RunCountRelativeAddress && responseData.Quantity == 2 && responseData.Data.Length >= 2)
                                     {
-                                        ushort word0 = responseData.Data[0]; //
-                                        ushort word1 = responseData.Data[1]; //
-                                        uint unsignedRunCount = ((uint)word1 << 16) | word0; //
-                                        int newRunCount = (int)unsignedRunCount; //
-                                        _logger.LogInformation("RunCount Raw from MQTT: Data[0]={Word0_Hex} (Dec:{Word0_Dec}), Data[1]={Word1_Hex} (Dec:{Word1_Dec})", //
-                                                              word0.ToString("X4"), word0, word1.ToString("X4"), word1); //
-                                        _logger.LogInformation("RunCount Combined (MSW first): Unsigned={UnsignedVal}, Signed={SignedVal}", //
-                                                               unsignedRunCount, newRunCount); //
+                                        ushort word0 = responseData.Data[0];
+                                        ushort word1 = responseData.Data[1];
+                                        uint unsignedRunCount = ((uint)word1 << 16) | word0;
+                                        int newRunCount = (int)unsignedRunCount;
+                                        _logger.LogInformation("來自 MQTT 的運轉次數原始值: Data[0]={Word0_Hex} (十進制:{Word0_Dec}), Data[1]={Word1_Hex} (十進制:{Word1_Dec})",
+                                                              word0.ToString("X4"), word0, word1.ToString("X4"), word1);
+                                        _logger.LogInformation("組合後的運轉次數 (MSW 優先): 無符號={UnsignedVal}, 有符號={SignedVal}",
+                                                               unsignedRunCount, newRunCount);
 
-                                        if (deviceInDb.RunCount != newRunCount) //
+                                        if (deviceInDb.RunCount != newRunCount)
                                         {
-                                            _logger.LogInformation("DB Update (Attempt): ESP32 {Esp32Id}, Slave {SlaveId} - RunCount changing from {OldRunCount} to {NewRunCount}",
+                                            _logger.LogInformation("資料庫更新 (嘗試): ESP32 {Esp32Id}, Slave {SlaveId} - 運轉次數從 {OldRunCount} 變為 {NewRunCount}",
                                                                    responseData.DeviceId, responseData.SlaveId, deviceInDb.RunCount, newRunCount);
-                                            deviceInDb.RunCount = newRunCount; //
-                                            dbChanged = true; //
+                                            deviceInDb.RunCount = newRunCount;
+                                            dbChanged = true;
                                         }
                                     }
 
-                                    if (dbChanged) //
+                                    if (dbChanged)
                                     {
-                                        deviceInDb.Timestamp = DateTime.UtcNow; //
-                                        _logger.LogInformation("DB Save (Attempt): Saving changes for ESP32 {Esp32Id}, Slave {SlaveId}. New Status: '{NewStatus}', New RunCount: {NewRunCount}",
+                                        deviceInDb.Timestamp = DateTime.UtcNow;
+                                        _logger.LogInformation("資料庫儲存 (嘗試): 儲存 ESP32 {Esp32Id}, Slave {SlaveId} 的變更。新狀態: '{NewStatus}', 新運轉次數: {NewRunCount}",
                                                                responseData.DeviceId, responseData.SlaveId, deviceInDb.Status, deviceInDb.RunCount);
-                                        await dbContext.SaveChangesAsync(); //
-                                        _logger.LogInformation("DB Save (Success): 成功更新資料庫：ESP32 {Esp32Id}, Slave {SlaveId}. Status is now '{FinalStatus}', RunCount is now {FinalRunCount}.", //
+                                        await dbContext.SaveChangesAsync();
+                                        _logger.LogInformation("資料庫儲存 (成功): 成功更新資料庫：ESP32 {Esp32Id}, Slave {SlaveId}。狀態現為 '{FinalStatus}', 運轉次數現為 {FinalRunCount}。",
                                                                responseData.DeviceId, responseData.SlaveId, deviceInDb.Status, deviceInDb.RunCount);
                                     }
                                     else
                                     {
-                                        _logger.LogInformation("No changes detected in DB for ESP32 {Esp32Id}, Slave {SlaveId} based on MQTT read response.", responseData.DeviceId, responseData.SlaveId);
+                                        _logger.LogInformation("根據 MQTT 讀取回應，ESP32 {Esp32Id}, Slave {SlaveId} 在資料庫中無變更。", responseData.DeviceId, responseData.SlaveId);
                                     }
                                 }
-                                else if (responseData.Status?.ToLower() == "error") //
+                                else if (responseData.Status?.ToLower() == "error")
                                 {
-                                    _logger.LogError("Modbus 讀取失敗 (ESP32: {Esp32Id}, Slave: {SlaveId}, Addr: {Addr}, Qty: {Qty}): {Message}", //
-                                                     responseData.DeviceId, responseData.SlaveId, responseData.Address, responseData.Quantity, responseData.Message); //
-                                    if (deviceInDb.Status != "通訊失敗") //
+                                    _logger.LogError("Modbus 讀取失敗 (ESP32: {Esp32Id}, Slave: {SlaveId}, Addr: {Addr}, Qty: {Qty}): {Message}",
+                                                     responseData.DeviceId, responseData.SlaveId, responseData.Address, responseData.Quantity, responseData.Message);
+                                    if (deviceInDb.Status != "通訊失敗")
                                     {
-                                        _logger.LogInformation("DB Update (Attempt): ESP32 {Esp32Id}, Slave {SlaveId} - Status changing to '通訊失敗' due to read error.", responseData.DeviceId, responseData.SlaveId);
-                                        deviceInDb.Status = "通訊失敗"; //
-                                        deviceInDb.Timestamp = DateTime.UtcNow; //
-                                        await dbContext.SaveChangesAsync(); //
-                                        _logger.LogInformation("DB Save (Success): Status for ESP32 {Esp32Id}, Slave {SlaveId} set to '通訊失敗'.", responseData.DeviceId, responseData.SlaveId);
+                                        _logger.LogInformation("資料庫更新 (嘗試): ESP32 {Esp32Id}, Slave {SlaveId} - 由於讀取錯誤，狀態變為 '通訊失敗'。", responseData.DeviceId, responseData.SlaveId);
+                                        deviceInDb.Status = "通訊失敗";
+                                        deviceInDb.Timestamp = DateTime.UtcNow;
+                                        await dbContext.SaveChangesAsync();
+                                        _logger.LogInformation("資料庫儲存 (成功): ESP32 {Esp32Id}, Slave {SlaveId} 的狀態已設為 '通訊失敗'。", responseData.DeviceId, responseData.SlaveId);
                                         dbChanged = true;
                                     }
                                 }
 
-                                // 恢復呼叫 HomeViewModel 更新 UI
                                 var homeViewModel = _serviceProvider.GetService<HomeViewModel>();
-                                if (homeViewModel != null) //
+                                if (homeViewModel != null)
                                 {
-                                    _logger.LogDebug("Calling HomeViewModel.UpdateDeviceStatusFromMqtt for Read Response. ESP32: {DeviceId}, Slave: {SlaveId}",
+                                    _logger.LogDebug("呼叫 HomeViewModel.UpdateDeviceStatusFromMqtt 以處理 Read Response。ESP32: {DeviceId}, Slave: {SlaveId}",
                                                      responseData.DeviceId, responseData.SlaveId);
-                                    // 使用 deviceInDb 的最新狀態來更新 UI
-                                    string statusForUi = deviceInDb.Status; //
-                                    int runCountForUi = deviceInDb.RunCount; //
-                                    string? contextMessageForUi = dbChanged ? "資料已從 Modbus 更新" : (responseData.Status?.ToLower() == "error" ? responseData.Message : "資料無變更或讀取成功"); //
+                                    string statusForUi = deviceInDb.Status;
+                                    int runCountForUi = deviceInDb.RunCount;
+                                    string? contextMessageForUi = dbChanged ? "資料已從 Modbus 更新" : (responseData.Status?.ToLower() == "error" ? responseData.Message : "資料無變更或讀取成功");
 
-                                    homeViewModel.UpdateDeviceStatusFromMqtt( //
-                                        responseData.DeviceId, //
-                                        responseData.SlaveId, //
-                                        statusForUi, //
-                                        runCountForUi,  //
-                                        contextMessageForUi //
+                                    homeViewModel.UpdateDeviceStatusFromMqtt(
+                                        responseData.DeviceId,
+                                        responseData.SlaveId,
+                                        statusForUi,
+                                        runCountForUi,
+                                        contextMessageForUi
                                     );
                                 }
                                 else
                                 {
-                                    _logger.LogWarning("HomeViewModel not available for UI update after Modbus Read Response. ESP32: {DeviceId}", responseData.DeviceId);
+                                    _logger.LogWarning("Modbus Read Response 後，HomeViewModel 不可用於 UI 更新。ESP32: {DeviceId}", responseData.DeviceId);
                                 }
-
                             }
                         }
                     }
                 }
-                catch (ObjectDisposedException odEx) //
+                catch (ObjectDisposedException odEx)
                 {
-                    _logger.LogWarning(odEx, "IServiceProvider 或其 Scope 已被釋放，無法處理 MQTT 訊息（可能在資料庫操作期間）。主題: {Topic}。這可能在應用程式關閉期間發生。", topic); //
+                    _logger.LogWarning(odEx, "IServiceProvider 或其 Scope 已被釋放，無法處理 MQTT 訊息（可能在資料庫操作期間）。主題: {Topic}。這可能在應用程式關閉期間發生。", topic);
                 }
-                catch (DbUpdateException dbEx) //
+                catch (DbUpdateException dbEx)
                 {
-                    _logger.LogError(dbEx, "資料庫更新時發生錯誤 (DbUpdateException)。主題: {Topic}, Payload: {Payload}", topic, payloadJson); //
+                    _logger.LogError(dbEx, "資料庫更新時發生錯誤 (DbUpdateException)。主題: {Topic}, Payload: {Payload}", topic, payloadJson);
                 }
-                catch (JsonException jsonEx) //
+                catch (JsonException jsonEx)
                 {
-                    _logger.LogError(jsonEx, "反序列化 MQTT payload 失敗. Topic: {Topic}, Payload: {Payload}", topic, payloadJson); //
+                    _logger.LogError(jsonEx, "反序列化 MQTT payload 失敗。主題: {Topic}, Payload: {Payload}", topic, payloadJson);
                 }
-                catch (Exception ex) //
+                catch (Exception ex)
                 {
-                    _logger.LogError(ex, "處理 MQTT 訊息時發生未預期錯誤. Topic: {Topic}", topic); //
+                    _logger.LogError(ex, "處理 MQTT 訊息時發生未預期錯誤。主題: {Topic}", topic);
                 }
             });
-            return Task.CompletedTask; //
+            return Task.CompletedTask;
         }
 
-        private static string? ParseDeviceIdFromTopic(string topic) //
+        private static string? ParseDeviceIdFromTopic(string topic)
         {
-            var parts = topic.Split('/'); //
-            if (parts.Length >= 2 && parts[0] == "devices") //
+            var parts = topic.Split('/');
+            if (parts.Length >= 2 && parts[0] == "devices")
             {
-                return parts[1]; //
+                return parts[1];
             }
-            return null; //
+            return null;
         }
 
-        private static string ConvertRawModbusStatusToString(ushort rawStatus) //
+        private static string ConvertRawModbusStatusToString(ushort rawStatus)
         {
-            return rawStatus switch //
+            return rawStatus switch
             {
-                0 => "閒置", //
-                1 => "運行中", //
-                2 => "故障", //
-                _ => $"未知狀態碼 ({rawStatus})", //
+                0 => "閒置",
+                1 => "運行中",
+                2 => "故障",
+                _ => $"未知狀態碼 ({rawStatus})",
             };
         }
 
-        public async Task<bool> SendModbusReadCommandAsync(string? targetEsp32MqttId, byte slaveId, ushort address, byte quantity, byte functionCode) //
+        public async Task<bool> SendModbusReadCommandAsync(string? targetEsp32MqttId, byte slaveId, ushort address, byte quantity, byte functionCode)
         {
-            if (string.IsNullOrEmpty(targetEsp32MqttId)) //
+            if (string.IsNullOrEmpty(targetEsp32MqttId))
             {
-                _logger.LogWarning("SendModbusReadCommandAsync: targetEsp32MqttId 不可為空。"); //
-                return false; //
+                _logger.LogWarning("SendModbusReadCommandAsync: targetEsp32MqttId 不可為空。");
+                return false;
             }
 
-            var modbusReadPayload = new //
+            var modbusReadPayload = new
             {
-                slaveId = slaveId, //
-                address = address, //
-                quantity = quantity, //
-                functionCode = functionCode //
+                slaveId = slaveId,
+                address = address,
+                quantity = quantity,
+                functionCode = functionCode
             };
-            string jsonPayload = JsonSerializer.Serialize(modbusReadPayload); //
-            string commandTopic = $"devices/{targetEsp32MqttId}/modbus/read/request"; //
+            string jsonPayload = JsonSerializer.Serialize(modbusReadPayload);
+            string commandTopic = $"devices/{targetEsp32MqttId}/modbus/read/request";
 
             try
             {
-                await _mqttService.PublishAsync(commandTopic, jsonPayload); //
-                _logger.LogInformation("已發送 Modbus Read 命令到 {Topic} (SlaveID: {SlaveId}): {Payload}", commandTopic, slaveId, jsonPayload); //
-                return true; //
+                await _mqttService.PublishAsync(commandTopic, jsonPayload);
+                _logger.LogInformation("已發送 Modbus Read 命令到 {Topic} (SlaveID: {SlaveId}): {Payload}", commandTopic, slaveId, jsonPayload);
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "發送 MQTT Modbus Read 命令失敗到 {Topic} (SlaveID: {SlaveId})", commandTopic, slaveId); //
-                return false; //
+                _logger.LogError(ex, "發送 MQTT Modbus Read 命令失敗到 {Topic} (SlaveID: {SlaveId})", commandTopic, slaveId);
+                return false;
             }
         }
 
-        public async Task<bool> SendModbusWriteCommandAsync(string? targetEsp32MqttId, byte slaveId, ushort address, ushort value) //
+        public async Task<bool> SendModbusWriteCommandAsync(string? targetEsp32MqttId, byte slaveId, ushort address, ushort value)
         {
-            if (string.IsNullOrEmpty(targetEsp32MqttId)) //
+            if (string.IsNullOrEmpty(targetEsp32MqttId))
             {
-                _logger.LogWarning("SendModbusWriteCommandAsync: targetEsp32MqttId 不可為空。"); //
-                return false; //
+                _logger.LogWarning("SendModbusWriteCommandAsync: targetEsp32MqttId 不可為空。");
+                return false;
             }
 
-            if (!IsLoggedIn || !CanControlDevice) //
+            if (!IsLoggedIn || !CanControlDevice)
             {
-                _logger.LogWarning("SendModbusWriteCommandAsync: 未登入或無權限控制設備。"); //
-                MessageBox.Show("未登入或無權限執行 Modbus 操作。", "權限錯誤", MessageBoxButton.OK, MessageBoxImage.Warning); //
-                return false; //
+                _logger.LogWarning("SendModbusWriteCommandAsync: 未登入或無權限控制設備。");
+                MessageBox.Show("未登入或無權限執行 Modbus 操作。", "權限錯誤", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
             }
 
-            var modbusWritePayload = new //
+            var modbusWritePayload = new
             {
-                slaveId = slaveId, //
-                address = address, //
-                value = value //
+                slaveId = slaveId,
+                address = address,
+                value = value
             };
-            string jsonPayload = JsonSerializer.Serialize(modbusWritePayload); //
-            string commandTopic = $"devices/{targetEsp32MqttId}/modbus/write/request"; //
+            string jsonPayload = JsonSerializer.Serialize(modbusWritePayload);
+            string commandTopic = $"devices/{targetEsp32MqttId}/modbus/write/request";
 
             try
             {
-                await _mqttService.PublishAsync(commandTopic, jsonPayload); //
-                _logger.LogInformation("已發送 Modbus Write 命令到 {Topic} (SlaveID: {SlaveId}): {Payload}", commandTopic, slaveId, jsonPayload); //
-                return true; //
+                await _mqttService.PublishAsync(commandTopic, jsonPayload);
+                _logger.LogInformation("已發送 Modbus Write 命令到 {Topic} (SlaveID: {SlaveId}): {Payload}", commandTopic, slaveId, jsonPayload);
+                return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "發送 MQTT Modbus Write 命令失敗到 {Topic} (SlaveID: {SlaveId})", commandTopic, slaveId); //
-                MessageBox.Show($"無法發送 Modbus 命令到 ESP32 {targetEsp32MqttId} (SlaveID: {slaveId})，請檢查 MQTT 連線。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error); //
-                return false; //
+                _logger.LogError(ex, "發送 MQTT Modbus Write 命令失敗到 {Topic} (SlaveID: {SlaveId})", commandTopic, slaveId);
+                MessageBox.Show($"無法發送 Modbus 命令到 ESP32 {targetEsp32MqttId} (SlaveID: {slaveId})，請檢查 MQTT 連線。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
             }
+        }
+
+
+        public void SetMainContentFrame(Frame frame)
+        {
+            _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame), "MainContentFrame 不可為 null。");
+            _isFrameInitialized = true;
+            _logger.LogInformation("MainContentFrame 已設置，類型：{FrameType}", frame.GetType().Name);
+            UpdateLoginState();
         }
 
 
         public void UpdateLoginState()
         {
-            var currentUserObject = _authService.GetCurrentUser(); //
-            CurrentUser = currentUserObject?.Username; //
-            bool oldIsLoggedIn = IsLoggedIn; // 用於判斷是否為登出操作
-            IsLoggedIn = currentUserObject != null; //
+            var currentUserObject = _authService.GetCurrentUser();
+            CurrentUser = currentUserObject?.Username;
+            bool oldIsLoggedIn = IsLoggedIn;
+            IsLoggedIn = currentUserObject != null;
 
-            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null) //
+            if (IsLoggedIn && currentUserObject != null && currentUserObject.PermissionsList != null)
             {
-                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) || //
-                              currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
-                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) || //
-                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
-                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString()); //
+                CanViewHome = currentUserObject.PermissionsList.Contains(Permission.ViewHome.ToString()) ||
+                              currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanControlDevice = currentUserObject.PermissionsList.Contains(Permission.ControlDevice.ToString()) ||
+                                   currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanViewSettings = currentUserObject.PermissionsList.Contains(Permission.ViewSettings.ToString()) ||
+                                  currentUserObject.PermissionsList.Contains(Permission.All.ToString());
+                CanAll = currentUserObject.PermissionsList.Contains(Permission.All.ToString());
 
-                // 如果登入且擁有控制設備的權限，則啟用 Modbus 輪詢
-                // 假設 CanControlDevice 權限足以啟用輪詢。您可以根據需要調整此邏輯或新增特定權限。
                 if (CanControlDevice)
                 {
                     _logger.LogInformation("用戶已登入且擁有足夠權限。正在啟用 Modbus 輪詢。");
@@ -519,80 +500,99 @@ namespace SANJET.Core.ViewModels
                 else
                 {
                     _logger.LogInformation("用戶已登入，但缺少 Modbus 輪詢權限。輪詢將保持禁用狀態。");
-                    _pollingStateService.DisablePolling(); // 確保權限不足時輪詢是禁用的
+                    _pollingStateService.DisablePolling();
+                }
+
+                if (!_isFrameInitialized || _mainContentFrame == null)
+                {
+                    _logger.LogWarning("MainContentFrame 未正確初始化，跳過導航。");
+                    return;
+                }
+
+                if (CanViewHome && (!IsHomeSelected && !IsSettingsSelected))
+                {
+                    _ = _navigationService.NavigateToHomeAsync(_mainContentFrame);
+                    IsHomeSelected = true;
+                    IsSettingsSelected = false;
+                }
+                else if (!CanViewHome && CanViewSettings && (!IsHomeSelected && !IsSettingsSelected))
+                {
+                    _navigationService.NavigateToSettings(_mainContentFrame);
+                    IsHomeSelected = false;
+                    IsSettingsSelected = true;
+                }
+                else if (!CanViewHome && !CanViewSettings)
+                {
+                    IsHomeSelected = false;
+                    IsSettingsSelected = false;
+                    _navigationService.ClearNavigation(_mainContentFrame);
                 }
             }
             else
             {
-                CanViewHome = false; //
-                CanControlDevice = false; //
-                CanAll = false; //
-                Esp32Devices?.Clear(); //
-                _mainContentFrame?.Navigate(null); //
+                CanViewHome = false;
+                CanControlDevice = false;
+                CanViewSettings = false;
+                CanAll = false;
+                IsHomeSelected = false;
+                IsSettingsSelected = false;
 
-                // 如果是從登入狀態變為未登入狀態（例如，登出操作），則禁用 Modbus 輪詢
+                if (_isFrameInitialized && _mainContentFrame != null)
+                {
+                    _navigationService.ClearNavigation(_mainContentFrame);
+                }
+                else
+                {
+                    _logger.LogWarning("MainContentFrame 未正確初始化，無法清除導航。");
+                }
+
                 if (oldIsLoggedIn && !IsLoggedIn)
                 {
                     _logger.LogInformation("用戶已登出或會話結束。正在禁用 Modbus 輪詢。");
                     _pollingStateService.DisablePolling();
                 }
-                else if (!IsLoggedIn && !_pollingStateService.IsPollingEnabled) // 應用程式啟動時，尚未登入
+                else if (!IsLoggedIn && !_pollingStateService.IsPollingEnabled)
                 {
                     _logger.LogInformation("應用程式啟動，用戶未登入。Modbus 輪詢初始為禁用狀態。");
-                    _pollingStateService.DisablePolling(); // 明確禁用
+                    _pollingStateService.DisablePolling();
                 }
-            }
-
-            if (IsLoggedIn && IsHomeSelected && _mainContentFrame != null) //
-            {
-                if (!(_mainContentFrame.Content is HomePage)) //
-                {
-                    _ = NavigateHomeAsync(); //
-                }
-            }
-            else if (!IsLoggedIn && _mainContentFrame != null) //
-            {
-                _mainContentFrame.Navigate(null); //
             }
         }
 
-
-        public void SetMainContentFrame(Frame frame) //
-        {
-            _mainContentFrame = frame ?? throw new ArgumentNullException(nameof(frame)); //
-            if (IsLoggedIn && IsHomeSelected && _mainContentFrame.Content == null) //
-            {
-                _ = NavigateHomeAsync(); //
-            }
-        }
-
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanExecuteHomeNavigation))]
         private async Task NavigateHomeAsync()
         {
-            if (_mainContentFrame != null)
+            if (!_isFrameInitialized || _mainContentFrame == null)
             {
-                IsHomeSelected = true;
-                // 檢查現有的 DataContext 是否已經是正確的 HomeViewModel 實例
-                var existingHomePage = _mainContentFrame.Content as HomePage;
-                var homeViewModelFromScope = _serviceProvider.GetService<HomeViewModel>(); // 從 MainViewModel 的作用域獲取
-
-                if (existingHomePage == null || existingHomePage.DataContext != homeViewModelFromScope)
-                {
-                    var homePage = new HomePage();
-                    if (homeViewModelFromScope != null)
-                    {
-                        homeViewModelFromScope.CanControlDevice = CanControlDevice;
-                        homePage.DataContext = homeViewModelFromScope; // 設定正確的實例
-                        await homeViewModelFromScope.LoadDevicesAsync();
-                    }
-                    _mainContentFrame.Navigate(homePage);
-                }
-                else if (homeViewModelFromScope != null) // 如果頁面已存在且 DataContext 正確，可能仍需刷新
-                {
-                    homeViewModelFromScope.CanControlDevice = CanControlDevice; // 確保權限正確
-                    await homeViewModelFromScope.LoadDevicesAsync(); // 考慮是否需要重新載入
-                }
+                _logger.LogWarning("MainContentFrame 未正確初始化，無法導航到首頁。");
+                return;
             }
+            await _navigationService.NavigateToHomeAsync(_mainContentFrame);
+            IsHomeSelected = true;
+            IsSettingsSelected = false;
+        }
+
+        private bool CanExecuteHomeNavigation()
+        {
+            return IsLoggedIn && CanViewHome && _isFrameInitialized && _mainContentFrame != null;
+        }
+
+        [RelayCommand(CanExecute = nameof(CanExecuteSettingsNavigation))]
+        private void NavigateToSettings()
+        {
+            if (!_isFrameInitialized || _mainContentFrame == null)
+            {
+                _logger.LogWarning("MainContentFrame 未正確初始化，無法導航到設定頁。");
+                return;
+            }
+            _navigationService.NavigateToSettings(_mainContentFrame);
+            IsHomeSelected = false;
+            IsSettingsSelected = true;
+        }
+
+        private bool CanExecuteSettingsNavigation()
+        {
+            return IsLoggedIn && CanViewSettings && _isFrameInitialized && _mainContentFrame != null;
         }
 
 
@@ -600,29 +600,28 @@ namespace SANJET.Core.ViewModels
         private void Logout()
         {
             _logger.LogInformation("執行登出操作。正在禁用 Modbus 輪詢。");
-            _pollingStateService.DisablePolling(); // 在登出時明確禁用輪詢
-            _authService.Logout(); //
-            UpdateLoginState(); //
+            _pollingStateService.DisablePolling();
+            _authService.Logout();
+            // UpdateLoginState 會處理 IsHomeSelected 和 IsSettingsSelected
+            UpdateLoginState();
         }
 
 
         [RelayCommand]
-        private void ShowLogin() //
+        private void ShowLogin()
         {
-            // ShowLogin 成功後會調用 UpdateLoginState，進而根據權限啟用輪詢
-            if (App.Host != null) //
+            if (App.Host != null)
             {
-                var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>(); //
-                loginWindow.Owner = Application.Current.MainWindow; //
-                bool? result = loginWindow.ShowDialog(); //
+                var loginWindow = App.Host.Services.GetRequiredService<LoginWindow>();
+                loginWindow.Owner = Application.Current.MainWindow;
+                bool? result = loginWindow.ShowDialog();
 
-                if (result == true) //
+                if (result == true)
                 {
-                    UpdateLoginState(); //
+                    UpdateLoginState(); // 登入成功後，UpdateLoginState 會處理初始導航
                 }
             }
         }
-
 
 
         public void Dispose()
@@ -636,19 +635,14 @@ namespace SANJET.Core.ViewModels
             {
                 if (disposing)
                 {
-                    // 釋放受控資源
-                    if (_mqttService is MqttService concreteMqttService) //
+                    if (_mqttService is MqttService concreteMqttService)
                     {
-                        concreteMqttService.ApplicationMessageReceivedAsync -= HandleEsp32MqttMessagesAsync; //
+                        concreteMqttService.ApplicationMessageReceivedAsync -= HandleEsp32MqttMessagesAsync;
                         _logger.LogInformation("MainViewModel disposed, unsubscribed from MQTT messages.");
                     }
                 }
-                // 釋放非受控資源 (如果有的話)
                 _isDisposed = true;
             }
         }
-
-
-
     }
 }

@@ -129,6 +129,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SANJET.Core;
 using Microsoft.EntityFrameworkCore;
+using SANJET.Core.Constants;
 
 namespace SANJET.Core.Services
 {
@@ -139,9 +140,6 @@ namespace SANJET.Core.Services
         private readonly IPollingStateService _pollingStateService; // 新增
         private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(10);
         private readonly ManualResetEventSlim _pollingSignal = new ManualResetEventSlim(false); // 新增，初始為未發信號
-
-        public const ushort STATUS_RELATIVE_ADDRESS = 1;
-        public const ushort RUNCOUNT_RELATIVE_ADDRESS = 10;
 
         public ModbusPollingService(ILogger<ModbusPollingService> logger,
                                     IServiceProvider serviceProvider,
@@ -241,11 +239,11 @@ namespace SANJET.Core.Services
                                 }
 
                                 _logger.LogInformation("輪詢狀態 - ESP32: {Esp32Id}, Slave: {SlaveId}, 地址: {Address}",
-                                    device.ControllingEsp32MqttId, device.SlaveId, STATUS_RELATIVE_ADDRESS);
+                                    device.ControllingEsp32MqttId, device.SlaveId, ModbusConstants.StatusRelativeAddress);
                                 await mainViewModel.SendModbusReadCommandAsync(
                                     device.ControllingEsp32MqttId,
                                     (byte)device.SlaveId,
-                                    STATUS_RELATIVE_ADDRESS,
+                                    ModbusConstants.StatusRelativeAddress,
                                     1, 3
                                 );
                                 await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
@@ -253,11 +251,11 @@ namespace SANJET.Core.Services
                                 if (stoppingToken.IsCancellationRequested) break;
 
                                 _logger.LogInformation("輪詢運轉次數 - ESP32: {Esp32Id}, Slave: {SlaveId}, 地址: {Address}",
-                                    device.ControllingEsp32MqttId, device.SlaveId, RUNCOUNT_RELATIVE_ADDRESS);
+                                    device.ControllingEsp32MqttId, device.SlaveId, ModbusConstants.RunCountRelativeAddress);
                                 await mainViewModel.SendModbusReadCommandAsync(
                                     device.ControllingEsp32MqttId,
                                     (byte)device.SlaveId,
-                                    RUNCOUNT_RELATIVE_ADDRESS,
+                                    ModbusConstants.RunCountRelativeAddress,
                                     2, 3
                                 );
                                 await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
