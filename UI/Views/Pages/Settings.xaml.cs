@@ -5,9 +5,9 @@ using System.Windows.Controls;
 namespace SANJET.UI.Views.Pages
 {
 
-    public partial class Settinngs : Page
+    public partial class Settings : Page
     {
-        public Settinngs()
+        public Settings()
         {
             InitializeComponent();
 

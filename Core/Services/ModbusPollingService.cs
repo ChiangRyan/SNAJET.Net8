@@ -187,7 +187,23 @@ namespace SANJET.Core.Services
                 try
                 {
                     _logger.LogTrace("Modbus輪詢服務：等待輪詢啟用信號或取消請求...");
-                    await _pollingSignal.WaitAsync(stoppingToken); // 等待信號被設定或服務被取消
+                    // await _pollingSignal.WaitAsync(stoppingToken); // 舊的錯誤行
+                    // 新的修改：使用 Task.Run 配合同步的 Wait 方法
+                    await Task.Run(() =>
+                    {
+                        try
+                        {
+                            _pollingSignal.Wait(stoppingToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // 當 stoppingToken 被取消時，_pollingSignal.Wait(stoppingToken) 會拋出此異常
+                            // Task.Run 會捕獲它並使 Task 進入 Canceled 狀態
+                            _logger.LogInformation("Modbus輪詢服務：_pollingSignal.Wait 被取消。");
+                            // 重新拋出以確保外部的 await Task.Run(...) 能正確處理取消
+                            throw;
+                        }
+                    }, stoppingToken);
 
                     if (stoppingToken.IsCancellationRequested)
                     {

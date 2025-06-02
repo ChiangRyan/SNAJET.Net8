@@ -16,8 +16,8 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private string? ipAddress;
 
-        [ObservableProperty]
-        private bool isLedOn; // 代表該設備的 LED 狀態
+        //[ObservableProperty]
+        //private bool isLedOn; // 代表該設備的 LED 狀態
 
         // 可以添加最後更新時間等其他資訊
         [ObservableProperty]

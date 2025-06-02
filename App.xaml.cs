@@ -77,6 +77,10 @@ namespace SANJET
                 await Host.StartAsync(); // 從 GetAwaiter().GetResult() 改為 await
                 appLogger?.LogInformation("Application Host started.");
 
+                var pollingStateSvc = Host.Services.GetRequiredService<IPollingStateService>();
+                pollingStateSvc.DisablePolling();
+                appLogger?.LogInformation("Polling explicitly disabled after Host start, before UI.");
+
                 // 3. 初始化資料庫
                 using (var scope = Host.Services.CreateScope())
                 {
@@ -87,26 +91,35 @@ namespace SANJET
                 // 移除原先手動啟動 MQTT Broker 的邏輯，因為已提前啟動
                 // await StartMqttBrokerAsync().GetAwaiter().GetResult(); // 移除或註解此行
 
-                
+
                 if (Host != null)
                 {
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
+                    // mainWindow 的構造會觸發 MainViewModel 的構造，其中也會調用 DisablePolling
                     mainWindow.Show();
 
                     var loginWindow = Host.Services.GetRequiredService<LoginWindow>();
                     loginWindow.Owner = mainWindow;
-                    bool? loginDialogResult = loginWindow.ShowDialog();
+                    bool? loginDialogResult = loginWindow.ShowDialog(); // 此時輪詢應已確認為禁用
 
-                    if (loginDialogResult == true) // 登入成功
+                    if (loginDialogResult == true)
                     {
                         if (mainWindow.DataContext is MainViewModel mainViewModel)
                         {
-                            mainViewModel.UpdateLoginState();
+                            mainViewModel.UpdateLoginState(); // 登入成功後，UpdateLoginState 和後續導航會判斷是否啟用輪詢
                         }
                     }
-                    else // 登入失敗或取消
+                    else
                     {
-                        loginWindow.Close();
+                        // loginWindow.Close(); // DialogResult 會自動關閉，除非有特殊處理
+                        // 如果登入失敗或取消，輪詢應保持禁用狀態
+                        // 可以考慮再次調用 DisablePolling 以確保，但理論上 MainViewModel 的邏輯已覆蓋
+                        var currentPollingState = Host.Services.GetRequiredService<IPollingStateService>();
+                        if (currentPollingState.IsPollingEnabled) // 額外檢查
+                        {
+                            appLogger?.LogWarning("Login failed or cancelled, but polling was found enabled. Forcing disable.");
+                            currentPollingState.DisablePolling();
+                        }
                     }
                 }
             }
