@@ -559,40 +559,80 @@ namespace SANJET.Core.ViewModels
             }
         }
 
+        // 修正 CanExecute 方法，移除過於嚴格的條件
+        private bool CanExecuteHomeNavigation()
+        {
+            return IsLoggedIn && CanViewHome;
+        }
+
+        private bool CanExecuteSettingsNavigation()
+        {
+            return IsLoggedIn && CanViewSettings;
+        }
+
+        // 修正導航方法，增加更多的錯誤處理
         [RelayCommand(CanExecute = nameof(CanExecuteHomeNavigation))]
         private async Task NavigateHomeAsync()
         {
-            if (!_isFrameInitialized || _mainContentFrame == null)
+            try
             {
-                _logger.LogWarning("MainContentFrame 未正確初始化，無法導航到首頁。");
-                return;
-            }
-            await _navigationService.NavigateToHomeAsync(_mainContentFrame);
-            IsHomeSelected = true;
-            IsSettingsSelected = false;
-        }
+                if (!_isFrameInitialized || _mainContentFrame == null)
+                {
+                    _logger.LogWarning("MainContentFrame 未正確初始化，嘗試重新設置。");
+                    // 嘗試重新獲取 Frame
+                    if (Application.Current.MainWindow is MainWindow mainWindow)
+                    {
+                        SetMainContentFrame(mainWindow.MainContentFrame);
+                    }
 
-        private bool CanExecuteHomeNavigation()
-        {
-            return IsLoggedIn && CanViewHome && _isFrameInitialized && _mainContentFrame != null;
+                    if (!_isFrameInitialized || _mainContentFrame == null)
+                    {
+                        _logger.LogError("無法獲取 MainContentFrame，導航失敗。");
+                        return;
+                    }
+                }
+
+                await _navigationService.NavigateToHomeAsync(_mainContentFrame);
+                IsHomeSelected = true;
+                IsSettingsSelected = false;
+                _logger.LogInformation("成功導航到首頁。");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "導航到首頁時發生錯誤。");
+            }
         }
 
         [RelayCommand(CanExecute = nameof(CanExecuteSettingsNavigation))]
         private void NavigateToSettings()
         {
-            if (!_isFrameInitialized || _mainContentFrame == null)
+            try
             {
-                _logger.LogWarning("MainContentFrame 未正確初始化，無法導航到設定頁。");
-                return;
-            }
-            _navigationService.NavigateToSettings(_mainContentFrame);
-            IsHomeSelected = false;
-            IsSettingsSelected = true;
-        }
+                if (!_isFrameInitialized || _mainContentFrame == null)
+                {
+                    _logger.LogWarning("MainContentFrame 未正確初始化，嘗試重新設置。");
+                    // 嘗試重新獲取 Frame
+                    if (Application.Current.MainWindow is MainWindow mainWindow)
+                    {
+                        SetMainContentFrame(mainWindow.MainContentFrame);
+                    }
 
-        private bool CanExecuteSettingsNavigation()
-        {
-            return IsLoggedIn && CanViewSettings && _isFrameInitialized && _mainContentFrame != null;
+                    if (!_isFrameInitialized || _mainContentFrame == null)
+                    {
+                        _logger.LogError("無法獲取 MainContentFrame，導航失敗。");
+                        return;
+                    }
+                }
+
+                _navigationService.NavigateToSettings(_mainContentFrame);
+                IsHomeSelected = false;
+                IsSettingsSelected = true;
+                _logger.LogInformation("成功導航到設置頁。");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "導航到設置頁時發生錯誤。");
+            }
         }
 
 
