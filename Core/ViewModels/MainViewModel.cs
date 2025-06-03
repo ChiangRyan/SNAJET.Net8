@@ -559,20 +559,9 @@ namespace SANJET.Core.ViewModels
             }
         }
 
-        // 修正 CanExecute 方法，移除過於嚴格的條件
-        private bool CanExecuteHomeNavigation()
-        {
-            return IsLoggedIn && CanViewHome;
-        }
 
-        private bool CanExecuteSettingsNavigation()
-        {
-            return IsLoggedIn && CanViewSettings;
-        }
-
-        // 修正導航方法，增加更多的錯誤處理
-        [RelayCommand(CanExecute = nameof(CanExecuteHomeNavigation))]
-        private async Task NavigateHomeAsync()
+        [RelayCommand]
+        private void NavigateHome()
         {
             try
             {
@@ -592,7 +581,7 @@ namespace SANJET.Core.ViewModels
                     }
                 }
 
-                await _navigationService.NavigateToHomeAsync(_mainContentFrame);
+                _navigationService.NavigateToHomeAsync(_mainContentFrame);
                 IsHomeSelected = true;
                 IsSettingsSelected = false;
                 _logger.LogInformation("成功導航到首頁。");
@@ -603,8 +592,8 @@ namespace SANJET.Core.ViewModels
             }
         }
 
-        [RelayCommand(CanExecute = nameof(CanExecuteSettingsNavigation))]
-        private void NavigateToSettings()
+        [RelayCommand]
+        private void NavigateSettings()
         {
             try
             {
