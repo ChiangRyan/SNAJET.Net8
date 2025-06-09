@@ -18,6 +18,7 @@ namespace SANJET.UI.Views.Windows
             // 訂閱事件
             // 在 DataContext 設定後，如果 ViewModel 中有預設密碼，手動設定 PasswordBox
             // 假設您的 PasswordBox 在 XAML 中的 x:Name 是 "UserPasswordBox"
+
             if (!string.IsNullOrEmpty(_viewModel.Password))
             {
                 PasswordBox.Password = _viewModel.Password; // PasswordBox 是 PasswordBox 的 x:Name
