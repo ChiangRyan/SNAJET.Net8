@@ -48,7 +48,7 @@ namespace SANJET
                             MessageBoxImage.Error);
 
             e.Handled = true;
-            Application.Current.Shutdown();
+            Current.Shutdown();
         }
 
         /// <summary>
@@ -69,19 +69,23 @@ namespace SANJET
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
                         services.AddDbContext<AppDbContext>(options =>
                             options.UseSqlite(context.Configuration.GetConnectionString("DefaultConnection")));
-                        services.AddScoped<IAuthenticationService, AuthenticationService>();
+                       
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
                         services.AddScoped<SettingsPageViewModel>();
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
-                        services.AddTransient<RecordWindow>();
+                        //services.AddTransient<RecordWindow>();
+
                         services.AddTransient<LoadingWindow>();
                         services.AddSingleton<MainWindow>();
+
+                        services.AddSingleton<IAuthenticationService, AuthenticationService>();
                         services.AddSingleton<IMqttService, MqttService>();
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
+
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();
                     })

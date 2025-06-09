@@ -7,6 +7,8 @@ namespace SANJET.Core
     {
         public DbSet<User> Users { get; set; }
         public DbSet<Device> Devices { get; set; }
+        // 新增下面這一行
+        public DbSet<DeviceRecord> DeviceRecords { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -34,12 +36,18 @@ namespace SANJET.Core
                 // entity.HasIndex(e => new { e.ControllingEsp32MqttId, e.SlaveId }).IsUnique();
             });
 
+            // 新增 DeviceRecord 的約束設定
+            modelBuilder.Entity<DeviceRecord>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.DeviceName).IsRequired();
+                entity.Property(e => e.Username).IsRequired();
+                entity.Property(e => e.Content).IsRequired();
+                entity.Property(e => e.Timestamp).IsRequired();
 
-
+                // 這裡可以選擇性地設定與 Device 的關聯，但對於此應用可能不是必要的
+                // entity.HasOne<Device>().WithMany().HasForeignKey(dr => dr.DeviceId);
+            });
         }
-
-
-
-
     }
 }

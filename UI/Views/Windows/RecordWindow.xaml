@@ -84,7 +84,7 @@
 
         <!-- 記錄數據表格 -->
         <DataGrid Grid.Row="1" 
-			ItemsSource="{Binding DeviceRecords}" 
+			ItemsSource="{Binding FilteredDeviceRecords}" 
 			SelectedItem="{Binding SelectedRecord}"
 			SelectionMode="Single"
 			AutoGenerateColumns="False" 

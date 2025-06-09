@@ -340,11 +340,45 @@ namespace SANJET.Core.ViewModels
         [RelayCommand]
         private void Record()
         {
-            _logger?.LogInformation("設備 {Name} (SlaveID: {SlaveId}) 觸發紀錄。", Name, SlaveId);
-            if (App.Host?.Services.GetService<RecordWindow>() is RecordWindow recordWindow)
+            if (App.Host == null)
             {
-                recordWindow.Owner = Application.Current.MainWindow;
+                _logger?.LogError("無法開啟紀錄視窗，因為 App.Host 為 null。");
+                return;
+            }
+
+            try
+            {
+                _logger?.LogInformation("為設備 {Name} (SlaveID: {SlaveId}) 開啟紀錄視窗。", Name, SlaveId);
+
+                // **更正：建立一個獨立的 DI Scope 來管理服務的生命週期**
+                using var scope = App.Host.Services.CreateScope();
+                var provider = scope.ServiceProvider;
+
+                // 從這個 scope 內解析服務
+                var dbContext = provider.GetRequiredService<AppDbContext>();
+                var recordLogger = provider.GetRequiredService<ILogger<RecordViewModel>>();
+                var authService = provider.GetRequiredService<IAuthenticationService>();
+
+                var currentUser = authService.GetCurrentUser()?.Username ?? "未知使用者";
+
+                // 1. 建立 RecordViewModel
+                var recordViewModel = new RecordViewModel(this, dbContext, recordLogger, currentUser);
+
+                // 2. 建立 RecordWindow
+                var recordWindow = new RecordWindow(recordViewModel)
+                {
+                    Owner = Application.Current.MainWindow,
+                    Title = $"{this.Name} - 設備紀錄"
+                };
+
+                // 3. 顯示視窗 (在此期間，scope 內的服務會保持存活)
                 recordWindow.ShowDialog();
+                // 當視窗關閉後，using 區塊結束，scope 和裡面的服務 (如 dbContext) 會被自動釋放
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "開啟紀錄視窗時發生錯誤。");
+                MessageBox.Show($"無法開啟紀錄視窗: {ex.Message}", "嚴重錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

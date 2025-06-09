@@ -1,384 +1,283 @@
-﻿using PropertyChanged;
-using SJAPP.Core.Model;
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Windows.Input;
-using System.Windows;
-using SJAPP.Core.Helpers;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using System.IO;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
-using System.Drawing;
+using SANJET.Core.Models;
+using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Data;
 
-namespace SJAPP.Core.ViewModel
+namespace SANJET.Core.ViewModels
 {
-    [AddINotifyPropertyChangedInterface]
-    public class RecordViewModel : ViewModelBase
+    public partial class RecordViewModel : ObservableObject
     {
-        private readonly SqliteDataService _dataService;
-        private readonly int _deviceId;
-        private readonly string _deviceName;
+        private readonly AppDbContext _dbContext;
+        private readonly ILogger<RecordViewModel> _logger;
+        private readonly DeviceViewModel _deviceViewModel; // 關聯的設備 ViewModel
         private readonly string _currentUsername;
-        private readonly int _runcount;
 
-        // 記錄集合
-        public ObservableCollection<DeviceRecord> DeviceRecords { get; set; }
-        // 篩選後的記錄集合（用於 DataGrid 顯示）
-        private ICollectionView _filteredDeviceRecords;
-        public ICollectionView FilteredDeviceRecords
+        [ObservableProperty]
+        private string _recordContent = string.Empty;
+
+        [ObservableProperty]
+        private DeviceRecord? _selectedRecord;
+
+        [ObservableProperty]
+        private string? _filterUsername;
+
+        [ObservableProperty]
+        private DateTime? _filterStartDate;
+
+        public ObservableCollection<DeviceRecord> DeviceRecords { get; } = new();
+        public ICollectionView FilteredDeviceRecords { get; }
+
+        // ViewModel 的建構函式，接收必要的依賴和資料
+        public RecordViewModel(DeviceViewModel deviceViewModel, AppDbContext dbContext, ILogger<RecordViewModel> logger, string currentUsername)
         {
-            get => _filteredDeviceRecords;
-            set
-            {
-                _filteredDeviceRecords = value;
-                OnPropertyChanged(nameof(FilteredDeviceRecords));
-            }
-        }
-        // 選中的記錄
-        public DeviceRecord SelectedRecord { get; set; }
-        // 記錄內容
-        public string RecordContent { get; set; }
-        // 篩選條件
-        public string FilterUsername { get; set; }
-        public DateTime? FilterStartDate { get; set; }
+            _deviceViewModel = deviceViewModel;
+            _dbContext = dbContext;
+            _logger = logger;
+            _currentUsername = currentUsername;
 
-        // 命令
-        public ICommand AddRecordCommand { get; private set; }
-        public ICommand RefreshCommand { get; private set; }
-        public ICommand DeleteRecordCommand { get; private set; }
-        public ICommand ExportToExcelCommand { get; private set; }
-        public ICommand ApplyFilterCommand { get; private set; }
-        public ICommand ResetFilterCommand { get; private set; }
-
-        public RecordViewModel(List<DeviceRecord> records, int deviceId, string deviceName, string username, int runcount, SqliteDataService dataService)
-        {
-            _dataService = dataService;
-            _deviceId = deviceId;
-            _deviceName = deviceName;
-            _currentUsername = username;
-            _runcount = runcount;
-
-            Debug.WriteLine($"RecordViewModel 初始化: DeviceId={_deviceId}, DeviceName={_deviceName}, Username={_currentUsername}");
-            if (!_dataService.DeviceExists(_deviceId))
-            {
-                Debug.WriteLine($"無效的 DeviceId: {_deviceId}");
-                MessageBox.Show($"設備 ID {_deviceId} 不存在於資料庫中，請選擇有效設備", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            // 初始化記錄集合
-            DeviceRecords = new ObservableCollection<DeviceRecord>(records.OrderByDescending(r => r.Timestamp));
-
-            // 初始化 CollectionView 進行排序和篩選
+            // 初始化 CollectionView 用於篩選和排序
             FilteredDeviceRecords = CollectionViewSource.GetDefaultView(DeviceRecords);
             FilteredDeviceRecords.SortDescriptions.Add(new SortDescription("Timestamp", ListSortDirection.Descending));
             FilteredDeviceRecords.Filter = FilterRecords;
 
-            // 初始化命令
-            AddRecordCommand = new RelayCommand(AddRecord, CanAddRecord);
-            RefreshCommand = new RelayCommand(RefreshRecords);
-            DeleteRecordCommand = new RelayCommand(DeleteRecord, CanDeleteRecord);
-            ExportToExcelCommand = new RelayCommand(ExportToExcel, CanExportToExcel);
-            ApplyFilterCommand = new RelayCommand(ApplyFilter);
-            ResetFilterCommand = new RelayCommand(ResetFilter);
+            // 非同步加載初始資料
+            _ = LoadRecordsAsync();
         }
 
-        private bool CanAddRecord()
-        {
-            return !string.IsNullOrWhiteSpace(RecordContent);
-        }
-
-        private bool CanDeleteRecord()
-        {
-            return SelectedRecord != null;
-        }
-
-        private bool CanExportToExcel()
-        {
-            return DeviceRecords != null && DeviceRecords.Count > 0;
-        }
-
-        private void AddRecord()
+        private async Task LoadRecordsAsync()
         {
             try
             {
-                Debug.WriteLine(
-                   $" AddRecord: DeviceId={_deviceId}," +
-                   $" DeviceName={_deviceName}," +
-                   $" Username={_currentUsername}," +
-                   $" Runcount={_runcount}," +
-                   $" Content={RecordContent}"
-                );
+                _logger.LogInformation("正在為設備 ID: {DeviceId} 加載紀錄...", _deviceViewModel.Id);
+                DeviceRecords.Clear();
+                var records = await _dbContext.DeviceRecords
+                    .Where(r => r.DeviceId == _deviceViewModel.Id)
+                    .OrderByDescending(r => r.Timestamp)
+                    .ToListAsync();
 
-                // 建立新記錄
+                foreach (var record in records)
+                {
+                    DeviceRecords.Add(record);
+                }
+                _logger.LogInformation("成功為設備 ID: {DeviceId} 加載了 {Count} 筆紀錄。", _deviceViewModel.Id, DeviceRecords.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "加載設備紀錄時發生錯誤。");
+                MessageBox.Show($"加載紀錄失敗: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanAddOrDeleteRecord))]
+        private async Task AddRecordAsync()
+        {
+            if (string.IsNullOrWhiteSpace(RecordContent))
+            {
+                MessageBox.Show("記錄內容不能為空。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
                 var newRecord = new DeviceRecord
                 {
-                    DeviceId = _deviceId,
-                    DeviceName = _deviceName,
-                    RunCount = _runcount,
+                    DeviceId = _deviceViewModel.Id,
+                    DeviceName = _deviceViewModel.Name, // 使用 ViewModel 的當前名稱
+                    RunCount = _deviceViewModel.RunCount, // 使用 ViewModel 的當前運轉次數
                     Username = _currentUsername,
                     Content = RecordContent.Trim(),
                     Timestamp = DateTime.Now
                 };
 
-                // 保存到資料庫
-                _dataService.AddDeviceRecord(newRecord);
+                _dbContext.DeviceRecords.Add(newRecord);
+                await _dbContext.SaveChangesAsync();
 
-                // 刷新顯示
-                RefreshRecords();
-
-                // 清空輸入
-                RecordContent = string.Empty;
-
-                MessageBox.Show("記錄已成功添加！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                DeviceRecords.Insert(0, newRecord); // 新紀錄加到最前面
+                RecordContent = string.Empty; // 清空輸入框
+                _logger.LogInformation("已為設備 ID: {DeviceId} 添加新紀錄。", _deviceViewModel.Id);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"AddRecord failed: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                MessageBox.Show($"添加記錄時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                _logger.LogError(ex, "添加紀錄時出錯。");
+                MessageBox.Show($"添加紀錄失敗: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void DeleteRecord()
+        [RelayCommand(CanExecute = nameof(CanAddOrDeleteRecord))]
+        private async Task DeleteRecordAsync()
         {
+            if (SelectedRecord == null)
+            {
+                MessageBox.Show("請先選擇要刪除的紀錄。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var result = MessageBox.Show($"確定要刪除 ID 為 {SelectedRecord.Id} 的紀錄嗎？", "確認刪除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            // 儲存要刪除的紀錄ID，以便稍後記錄
+            var recordIdToDelete = SelectedRecord.Id;
+
             try
             {
-                if (SelectedRecord == null)
+                // **增加保護性檢查**
+                if (_dbContext == null)
                 {
-                    MessageBox.Show("請先選擇要刪除的記錄", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    _logger?.LogError("DeleteRecordAsync failed because _dbContext is null.");
+                    MessageBox.Show("資料庫連線已遺失，無法刪除。", "嚴重錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
-                // 確認刪除
-                var result = MessageBox.Show($"確定要刪除ID為 {SelectedRecord.Id} 的記錄嗎？", "確認刪除",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+                _dbContext.DeviceRecords.Remove(SelectedRecord);
+                await _dbContext.SaveChangesAsync();
 
-                if (result == MessageBoxResult.Yes)
-                {
-                    Debug.WriteLine($"正在刪除記錄 ID: {SelectedRecord.Id}，設備 ID: {_deviceId}");
+                DeviceRecords.Remove(SelectedRecord);
 
-                    // 從資料庫中刪除，傳遞 deviceId 和 recordId
-                    bool success = _dataService.DeleteDeviceRecord(_deviceId, SelectedRecord.Id);
-
-                    if (success)
-                    {
-                        // 從集合中移除
-                        DeviceRecords.Remove(SelectedRecord);
-                        MessageBox.Show("記錄已成功刪除！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("刪除記錄失敗！記錄可能已被其他用戶刪除。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-                        // 刷新所有記錄
-                        RefreshRecords();
-                    }
-                }
+                // 使用先前儲存的 ID 來記錄
+                _logger?.LogInformation("紀錄 ID: {RecordId} 已被刪除。", recordIdToDelete);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"DeleteRecord failed: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                MessageBox.Show($"刪除記錄時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                // **主要修正：使用 ?. 來安全地呼叫日誌**
+                _logger?.LogError(ex, "刪除紀錄時出錯。");
+                MessageBox.Show($"刪除紀錄失敗: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void RefreshRecords()
+        private bool CanAddOrDeleteRecord()
         {
-            try
-            {
-                // 從資料庫中重新讀取此設備的記錄
-                var records = _dataService.GetDeviceRecords(_deviceId);
-
-                // 更新記錄集合
-                DeviceRecords.Clear();
-                foreach (var record in records.OrderByDescending(r => r.Timestamp))
-                {
-                    DeviceRecords.Add(record);
-                }
-                // 重新應用篩選
-                FilteredDeviceRecords.Refresh();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"刷新記錄時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            // 可以在此加入權限判斷
+            return true;
         }
 
-        private void ExportToExcel()
+        [RelayCommand]
+        private void ApplyFilter()
         {
-            try
-            {
-                // 建立儲存檔案對話框
-                SaveFileDialog saveFileDialog = new SaveFileDialog
-                {
-                    Filter = "Excel檔案 (*.xlsx)|*.xlsx",
-                    Title = "導出設備記錄",
-                    FileName = $"{_deviceName}_記錄_{DateTime.Now:yyyyMMdd}",
-                    DefaultExt = ".xlsx"
-                };
+            FilteredDeviceRecords.Refresh();
+        }
 
-                if (saveFileDialog.ShowDialog() == true)
-                {
-                    string filePath = saveFileDialog.FileName;
-                    // 檢查檔案是否已存在
-                    string templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "導出模板", "CP08-003-02版-產品測試記錄表.xlsx");
-                    // 檢查模板檔案是否存在
-                    if (!File.Exists(templatePath))
-                    {
-                        MessageBox.Show($"模板檔案不存在: {templatePath}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-                        return;
-                    }
-                    // 設定EPPlus許可模式
-                    // 如果你代表「機構」以非商業方式使用：
-                    ExcelPackage.License.SetNonCommercialOrganization("Sanjet");
-                    // 或者，若只是「個人」非商業使用：
-                    //ExcelPackage.License.SetNonCommercialPersonal("你的姓名");
-
-                    // 使用模板載入
-                    using (var package = new ExcelPackage(new FileInfo(templatePath)))
-                    {
-                        var worksheet = package.Workbook.Worksheets[0]; // 假設只用第一個工作表
-
-                        // 創建工作表
-                        //var worksheet = package.Workbook.Worksheets.Add($"{_deviceName}記錄");
-
-                        int startRow = 4; // 根據模板格式調整填寫起始列
-
-                        foreach (var record in DeviceRecords.OrderBy(r => r.Timestamp))  // 根據時間排序「舊 → 新」
-                        {
-                            worksheet.Cells[startRow, 1].Value = record.Id;
-                            worksheet.Cells[startRow, 2].Value = record.Timestamp;
-                            worksheet.Cells[startRow, 2].Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
-                            worksheet.Cells[startRow, 3].Value = record.DeviceName;
-                            worksheet.Cells[startRow, 4].Value = record.RunCount;
-                            worksheet.Cells[startRow, 5].Value = record.Content;
-                            worksheet.Cells[startRow, 6].Value = record.Username;
-                            startRow++;
-
-                            // 自動調整欄寬
-                            worksheet.Cells[1, 1, startRow - 1, 6].AutoFitColumns();
-                        }
-
-                        /*
-                        // 設定標題行
-                        worksheet.Cells[1, 1].Value = "排序";
-                        worksheet.Cells[1, 2].Value = "日期時間";
-                        worksheet.Cells[1, 3].Value = "機種";
-                        worksheet.Cells[1, 4].Value = "跑合";
-                        worksheet.Cells[1, 5].Value = "測試狀況";
-                        worksheet.Cells[1, 6].Value = "使用者";
-
-                        // 格式化標題行
-                        using (var range = worksheet.Cells[1, 1, 1, 6])
-                        {
-                            range.Style.Font.Bold = true;
-                            range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                            range.Style.Fill.BackgroundColor.SetColor(Color.LightBlue);
-                            range.Style.Font.Size = 12;
-                            range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                        }
-
-                        // 填充資料
-                        int row = 2;
-                        foreach (var record in DeviceRecords)
-                        {
-                            worksheet.Cells[row, 1].Value = record.Id;
-                            worksheet.Cells[row, 2].Value = record.Timestamp;
-                            worksheet.Cells[row, 2].Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
-                            worksheet.Cells[row, 3].Value = record.DeviceName;
-                            worksheet.Cells[row, 4].Value = record.RunCount;
-                            worksheet.Cells[row, 5].Value = record.Content;
-                            worksheet.Cells[row, 6].Value = record.Username;
-                            row++;
-                        }
-
-                        // 自動調整欄寬
-                        worksheet.Cells[1, 1, row - 1, 6].AutoFitColumns();
-
-                        // 設定備註信息
-                        //worksheet.Cells[row + 1, 1].Value = $"導出時間: {DateTime.Now}";
-                        //worksheet.Cells[row + 2, 1].Value = $"導出者: {_currentUsername}";
-
-                         */
-
-                        // 保存檔案
-                        package.SaveAs(new FileInfo(filePath));
-                    }
-
-                    MessageBox.Show($"記錄已成功導出至: {filePath}", "導出成功", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                    // 詢問用戶是否打開檔案
-                    if (MessageBox.Show("是否立即打開導出的檔案？", "操作確認", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = filePath,
-                            UseShellExecute = true
-                        });
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"ExportToExcel failed: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                MessageBox.Show($"導出Excel時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+        [RelayCommand]
+        private void ResetFilter()
+        {
+            FilterUsername = null;
+            FilterStartDate = null;
+            FilteredDeviceRecords.Refresh();
         }
 
         private bool FilterRecords(object item)
         {
-            var record = item as DeviceRecord;
-            if (record == null) return false;
+            if (item is not DeviceRecord record) return false;
 
-            bool matches = true;
+            bool isUserMatch = string.IsNullOrWhiteSpace(FilterUsername) ||
+                               (record.Username?.Contains(FilterUsername, StringComparison.OrdinalIgnoreCase) ?? false);
 
-            // 篩選使用者
-            if (!string.IsNullOrWhiteSpace(FilterUsername))
-            {
-                matches &= record.Username.IndexOf(FilterUsername, StringComparison.OrdinalIgnoreCase) >= 0;
-            }
+            bool isDateMatch = !FilterStartDate.HasValue ||
+                               record.Timestamp.Date >= FilterStartDate.Value.Date;
 
-            // 篩選開始日期
-            if (FilterStartDate.HasValue)
-            {
-                matches &= record.Timestamp.Date >= FilterStartDate.Value.Date;
-            }
-
-            return matches;
+            return isUserMatch && isDateMatch;
         }
 
-        private void ApplyFilter()
+        [RelayCommand]
+        private void ExportToExcel()
         {
+            var saveFileDialog = new SaveFileDialog
+            {
+                Filter = "Excel 檔案 (*.xlsx)|*.xlsx",
+                Title = "匯出設備紀錄",
+                FileName = $"{_deviceViewModel.Name}_紀錄_{DateTime.Now:yyyyMMdd}.xlsx"
+            };
+
+            if (saveFileDialog.ShowDialog() != true) return;
+
+            string filePath = saveFileDialog.FileName;
+            // 建立模板的完整路徑
+            string templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "導出模板", "CP08-003-02版-產品測試記錄表.xlsx");
+
+            // 檢查模板是否存在
+            if (!File.Exists(templatePath))
+            {
+                _logger.LogError("找不到 Excel 模板檔案於: {TemplatePath}", templatePath);
+                MessageBox.Show($"模板檔案不存在，請確認路徑: {templatePath}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
             try
             {
-                Debug.WriteLine("Applying filter...");
-                FilteredDeviceRecords.Refresh();
+                ExcelPackage.License.SetNonCommercialOrganization("Sanjet");
+
+                // **更正：從模板檔案載入 Excel Package**
+                using var package = new ExcelPackage(new FileInfo(templatePath));
+
+                // 假設資料要填入第一個工作表
+                var worksheet = package.Workbook.Worksheets[0];
+
+                // 根據您舊程式碼的邏輯，從第 4 列開始填寫資料
+                int startRow = 4;
+                int currentRow = startRow;
+
+                // 根據時間升序排序，以便舊紀錄在前面
+                var recordsToExport = FilteredDeviceRecords.Cast<DeviceRecord>().OrderBy(r => r.Timestamp);
+
+                foreach (var record in recordsToExport)
+                {
+                    // 根據模板的欄位填入資料
+                    worksheet.Cells[currentRow, 1].Value = record.Id;       // A欄: 排序
+                    worksheet.Cells[currentRow, 2].Value = record.Timestamp;// B欄: 日期時間
+                    worksheet.Cells[currentRow, 2].Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
+                    worksheet.Cells[currentRow, 3].Value = record.DeviceName; // C欄: 機種
+                    worksheet.Cells[currentRow, 4].Value = record.RunCount;   // D欄: 跑合
+                    worksheet.Cells[currentRow, 5].Value = record.Content;    // E欄: 測試狀況
+                    worksheet.Cells[currentRow, 6].Value = record.Username;   // F欄: 使用者
+                    currentRow++;
+                }
+
+                // 自動調整欄寬
+                //worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+
+                // 針對特定欄位自動調整欄寬
+                worksheet.Column(1).AutoFit(); // A欄 (排序)
+                worksheet.Column(2).AutoFit(); // B欄 (時間)
+                worksheet.Column(3).AutoFit(); // C欄 (機種)
+                worksheet.Column(4).AutoFit(); // D欄 (跑合)
+                worksheet.Column(6).AutoFit(); // F欄 (使用者)
+
+                // 設定 E 欄 (測試狀況) 的格式
+                worksheet.Column(5).Width = 60; // 設定一個固定的寬度，例如 60
+                worksheet.Column(5).Style.WrapText = true; // 啟用該欄的自動換行功能
+
+
+                // **將修改後的模板內容另存為使用者指定的新檔案**
+                package.SaveAs(new FileInfo(filePath));
+
+                MessageBox.Show($"紀錄已成功匯出至: {filePath}", "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // 詢問使用者是否開啟檔案
+                if (MessageBox.Show("是否立即開啟匯出的檔案？", "操作確認", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    // 需要 System.Diagnostics.Process
+                    Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+                }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ApplyFilter failed: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                MessageBox.Show($"應用篩選時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void ResetFilter()
-        {
-            try
-            {
-                Debug.WriteLine("Resetting filter...");
-                 FilterUsername = string.Empty;
-                FilterStartDate = null;
-                FilteredDeviceRecords.Refresh();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"ResetFilter failed: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                MessageBox.Show($"重置篩選時發生錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                _logger.LogError(ex, "匯出 Excel 失敗。");
+                MessageBox.Show($"匯出失敗: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
 }
-
