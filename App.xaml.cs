@@ -6,13 +6,12 @@ using Microsoft.Extensions.Logging;
 using SANJET.Core;
 using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
-using SANJET.Core.Services; // 確保 MqttClientConnectionService 被引用
+using SANJET.Core.Services; 
 using SANJET.Core.ViewModels;
 using SANJET.UI.Views.Windows;
-using System.Threading.Tasks; // 新增
+using System.Threading.Tasks; 
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop; // <--- 請新增此行
 
 namespace SANJET
 {
@@ -21,7 +20,6 @@ namespace SANJET
         public static IHost? Host { get; private set; }
         private IMqttBrokerService? _mqttBrokerService;
 
-        // 將 OnStartup 改為 async void
         protected override async void OnStartup(StartupEventArgs e)
         {
             try
@@ -45,7 +43,7 @@ namespace SANJET
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
                         services.AddTransient<RecordWindow>();
-                        services.AddTransient<LoadingWindow>(); // 註冊 LoadingWindow
+                        services.AddTransient<LoadingWindow>();
 
                         services.AddSingleton<MainWindow>();
                         services.AddSingleton<IMqttService, MqttService>();
@@ -53,6 +51,7 @@ namespace SANJET
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
 
+                        // 註冊新的背景服務
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();
 
@@ -67,6 +66,7 @@ namespace SANJET
 
                 var appLogger = Host.Services.GetService<ILogger<App>>();
 
+                // 1. 手動解析並啟動 MQTT Broker 服務 (在 Host.StartAsync() 之前)
                 _mqttBrokerService = Host.Services.GetRequiredService<IMqttBrokerService>();
                 try
                 {
@@ -80,47 +80,51 @@ namespace SANJET
                                     "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
 
-                await Host.StartAsync();
+                // 2. 啟動 Host (這將會啟動 MqttClientConnectionService 等 IHostedService)
+                await Host.StartAsync(); // 從 GetAwaiter().GetResult() 改為 await
                 appLogger?.LogInformation("Application Host started.");
 
                 var pollingStateSvc = Host.Services.GetRequiredService<IPollingStateService>();
                 pollingStateSvc.DisablePolling();
                 appLogger?.LogInformation("Polling explicitly disabled after Host start, before UI.");
 
-                // --- 以下是新的啟動流程 ---
-
-                // 1. 顯示載入視窗
                 var loadingWindow = Host.Services.GetRequiredService<LoadingWindow>();
                 loadingWindow.Show();
 
+
                 // 2. 進行資料庫連線測試
                 bool isConnected = await CheckDatabaseConnectionAsync(Host);
-
-                // 3. 關閉載入視窗
-                loadingWindow.Close();
-
                 // 4. 根據連線結果決定下一步
                 if (isConnected)
                 {
+                    loadingWindow.Close();
                     appLogger?.LogInformation("Database connection successful. Initializing application.");
 
-                    // 初始化資料庫 (EnsureCreated 和 SeedData)
+                    // 3. 初始化資料庫
                     using (var scope = Host.Services.CreateScope())
                     {
                         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                        SeedData(dbContext);
+                        SeedData(dbContext); // SeedData 內若使用 Host.Services.GetService<ILogger<App>>() 則 Host 需已建立
                     }
+                }
+                else
+                {
+                    appLogger?.LogError("Database connection failed. Application will not start properly.");
+                    MessageBox.Show("無法連接到資料庫，請檢查連線設定。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Shutdown(); // 結束應用程式
+                    return; // 提前返回，避免後續 UI 邏輯執行
+                }
 
+                if (Host != null)
+                {
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
                     // mainWindow 的構造會觸發 MainViewModel 的構造，其中也會調用 DisablePolling
                     mainWindow.Show();
 
-                    // 5. 顯示登入視窗 (不再設定 Owner)
                     var loginWindow = Host.Services.GetRequiredService<LoginWindow>();
                     loginWindow.Owner = mainWindow;
-                    bool? loginDialogResult = loginWindow.ShowDialog(); // ShowDialog 會等待視窗關閉
+                    bool? loginDialogResult = loginWindow.ShowDialog(); // 此時輪詢應已確認為禁用
 
-                    // 6. 檢查登入結果
                     if (loginDialogResult == true)
                     {
                         if (mainWindow.DataContext is MainViewModel mainViewModel)
@@ -141,20 +145,16 @@ namespace SANJET
                         }
                     }
                 }
-                else
-                {
-                    appLogger?.LogCritical("Database connection failed. Application will shut down.");
-                    MessageBox.Show("無法連接到資料庫，請檢查網路連線或資料庫路徑設定。\n應用程式即將關閉。", "嚴重錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-                    Shutdown();
-                }
             }
             catch (Exception ex)
             {
-                var logger = Host?.Services.GetService<ILogger<App>>();
-                logger?.LogError(ex, "應用程式啟動失敗");
+                var logger = Host?.Services.GetService<ILogger<App>>() ?? throw new InvalidOperationException("無法獲取日誌服務");
+                logger.LogError(ex, "應用程式啟動失敗");
                 MessageBox.Show($"啟動失敗：{ex.Message}\n{ex.StackTrace}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown();
             }
+
+            // base.OnStartup(e); // WPF 的 Application.OnStartup 是 void，若要呼叫 base，async void 可能不適合直接 base.OnStartup
         }
 
         /// <summary>
