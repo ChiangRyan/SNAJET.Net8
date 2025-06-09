@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,9 +9,10 @@ using SANJET.Core.Models;
 using SANJET.Core.Services; // 確保 MqttClientConnectionService 被引用
 using SANJET.Core.ViewModels;
 using SANJET.UI.Views.Windows;
+using System.Threading.Tasks; // 新增
 using System.Windows;
 using System.Windows.Controls;
-using System.Threading.Tasks; // 新增
+using System.Windows.Interop; // <--- 請新增此行
 
 namespace SANJET
 {
@@ -19,6 +21,7 @@ namespace SANJET
         public static IHost? Host { get; private set; }
         private IMqttBrokerService? _mqttBrokerService;
 
+        // 將 OnStartup 改為 async void
         protected override async void OnStartup(StartupEventArgs e)
         {
             try
@@ -29,8 +32,11 @@ namespace SANJET
                     .ConfigureServices((context, services) =>
                     {
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
+
+                        // 從 context.Configuration 讀取名為 "DefaultConnection" 的連接字串
                         services.AddDbContext<AppDbContext>(options =>
-                            options.UseSqlite("Data Source=sanjet.db"));
+                            options.UseSqlite(context.Configuration.GetConnectionString("DefaultConnection")));
+
                         services.AddScoped<IAuthenticationService, AuthenticationService>();
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
@@ -38,16 +44,15 @@ namespace SANJET
 
                         services.AddTransient<LoginViewModel>();
                         services.AddTransient<LoginWindow>();
-                        services.AddTransient<RecordView>();
-
+                        services.AddTransient<RecordWindow>();
+                        services.AddTransient<LoadingWindow>(); // 註冊 LoadingWindow
 
                         services.AddSingleton<MainWindow>();
                         services.AddSingleton<IMqttService, MqttService>();
-                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>(); 
+                        services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
 
-                        // 註冊新的背景服務
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();
 
@@ -62,7 +67,6 @@ namespace SANJET
 
                 var appLogger = Host.Services.GetService<ILogger<App>>();
 
-                // 1. 手動解析並啟動 MQTT Broker 服務 (在 Host.StartAsync() 之前)
                 _mqttBrokerService = Host.Services.GetRequiredService<IMqttBrokerService>();
                 try
                 {
@@ -76,35 +80,47 @@ namespace SANJET
                                     "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
 
-                // 2. 啟動 Host (這將會啟動 MqttClientConnectionService 等 IHostedService)
-                await Host.StartAsync(); // 從 GetAwaiter().GetResult() 改為 await
+                await Host.StartAsync();
                 appLogger?.LogInformation("Application Host started.");
 
                 var pollingStateSvc = Host.Services.GetRequiredService<IPollingStateService>();
                 pollingStateSvc.DisablePolling();
                 appLogger?.LogInformation("Polling explicitly disabled after Host start, before UI.");
 
-                // 3. 初始化資料庫
-                using (var scope = Host.Services.CreateScope())
+                // --- 以下是新的啟動流程 ---
+
+                // 1. 顯示載入視窗
+                var loadingWindow = Host.Services.GetRequiredService<LoadingWindow>();
+                loadingWindow.Show();
+
+                // 2. 進行資料庫連線測試
+                bool isConnected = await CheckDatabaseConnectionAsync(Host);
+
+                // 3. 關閉載入視窗
+                loadingWindow.Close();
+
+                // 4. 根據連線結果決定下一步
+                if (isConnected)
                 {
-                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    SeedData(dbContext); // SeedData 內若使用 Host.Services.GetService<ILogger<App>>() 則 Host 需已建立
-                }
+                    appLogger?.LogInformation("Database connection successful. Initializing application.");
 
-                // 移除原先手動啟動 MQTT Broker 的邏輯，因為已提前啟動
-                // await StartMqttBrokerAsync().GetAwaiter().GetResult(); // 移除或註解此行
+                    // 初始化資料庫 (EnsureCreated 和 SeedData)
+                    using (var scope = Host.Services.CreateScope())
+                    {
+                        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        SeedData(dbContext);
+                    }
 
-
-                if (Host != null)
-                {
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
                     // mainWindow 的構造會觸發 MainViewModel 的構造，其中也會調用 DisablePolling
                     mainWindow.Show();
 
+                    // 5. 顯示登入視窗 (不再設定 Owner)
                     var loginWindow = Host.Services.GetRequiredService<LoginWindow>();
                     loginWindow.Owner = mainWindow;
-                    bool? loginDialogResult = loginWindow.ShowDialog(); // 此時輪詢應已確認為禁用
+                    bool? loginDialogResult = loginWindow.ShowDialog(); // ShowDialog 會等待視窗關閉
 
+                    // 6. 檢查登入結果
                     if (loginDialogResult == true)
                     {
                         if (mainWindow.DataContext is MainViewModel mainViewModel)
@@ -125,16 +141,56 @@ namespace SANJET
                         }
                     }
                 }
+                else
+                {
+                    appLogger?.LogCritical("Database connection failed. Application will shut down.");
+                    MessageBox.Show("無法連接到資料庫，請檢查網路連線或資料庫路徑設定。\n應用程式即將關閉。", "嚴重錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Shutdown();
+                }
             }
             catch (Exception ex)
             {
-                var logger = Host?.Services.GetService<ILogger<App>>() ?? throw new InvalidOperationException("無法獲取日誌服務");
-                logger.LogError(ex, "應用程式啟動失敗");
+                var logger = Host?.Services.GetService<ILogger<App>>();
+                logger?.LogError(ex, "應用程式啟動失敗");
                 MessageBox.Show($"啟動失敗：{ex.Message}\n{ex.StackTrace}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown();
             }
+        }
 
-            // base.OnStartup(e); // WPF 的 Application.OnStartup 是 void，若要呼叫 base，async void 可能不適合直接 base.OnStartup
+        /// <summary>
+        /// 檢查與資料庫的連線是否正常
+        /// </summary>
+        /// <param name="host">應用程式的 IHost</param>
+        /// <returns>如果連線成功則返回 true，否則返回 false</returns>
+        private async Task<bool> CheckDatabaseConnectionAsync(IHost host)
+        {
+            var logger = host.Services.GetRequiredService<ILogger<App>>();
+            logger.LogInformation("Checking database connection...");
+
+            // 建立一個獨立的服務範圍來解析 AppDbContext
+            // 這樣可以確保 DbContext 在檢查後被正確釋放
+            using var scope = host.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            try
+            {
+                // CanConnectAsync 是 EF Core 提供的非同步方法，用於測試連線
+                if (await dbContext.Database.CanConnectAsync())
+                {
+                    logger.LogInformation("Database connection test successful.");
+                    return true;
+                }
+                else
+                {
+                    logger.LogWarning("Database.CanConnectAsync returned false.");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to connect to the database.");
+                return false;
+            }
         }
 
         private static void SeedData(AppDbContext dbContext)

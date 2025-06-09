@@ -3,8 +3,11 @@ using System.Diagnostics;
 
 namespace SANJET.UI.Views.Windows
 {
-    public partial class RecordView : Window
+    public partial class RecordWindow : Window
     {
-        
+        public RecordWindow()
+        {
+            InitializeComponent();
+        }
     }
 }

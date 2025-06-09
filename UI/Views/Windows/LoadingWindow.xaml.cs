@@ -7,6 +7,9 @@ namespace SANJET.UI.Views.Windows
 {
     public partial class LoadingWindow : Window
     {
-
+        public LoadingWindow()
+        {
+            InitializeComponent();
+        }
     }
 }

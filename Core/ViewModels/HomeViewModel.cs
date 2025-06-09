@@ -341,10 +341,10 @@ namespace SANJET.Core.ViewModels
         private void Record()
         {
             _logger?.LogInformation("設備 {Name} (SlaveID: {SlaveId}) 觸發紀錄。", Name, SlaveId);
-            if (App.Host?.Services.GetService<RecordView>() is RecordView recordView)
+            if (App.Host?.Services.GetService<RecordWindow>() is RecordWindow recordWindow)
             {
-                recordView.Owner = Application.Current.MainWindow;
-                recordView.ShowDialog();
+                recordWindow.Owner = Application.Current.MainWindow;
+                recordWindow.ShowDialog();
             }
         }
     }
