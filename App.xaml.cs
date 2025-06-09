@@ -56,6 +56,9 @@ namespace SANJET
         /// </summary>
         protected override async void OnStartup(StartupEventArgs e)
         {
+            // 設定應用程式只有在明確呼叫 Shutdown() 時才關閉
+            //Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             try
             {
                 SQLitePCL.Batteries.Init();
@@ -111,8 +114,6 @@ namespace SANJET
                 // 執行需要時間的啟動任務
                 bool isConnected = await CheckDatabaseConnectionAsync(Host, appLogger);
 
-                // 任務完成後關閉載入視窗
-                loadingWindow.Close();
 
                 if (isConnected)
                 {
@@ -127,7 +128,13 @@ namespace SANJET
                     // 顯示主視窗。登入邏輯將由 MainWindow 的 Loaded 事件觸發。
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
                     Application.Current.MainWindow = mainWindow; // 明確設定應用程式的主視窗
+
+                    await Task.Delay(3000);
+                    // 任務完成後關閉載入視窗
+                    loadingWindow.Close();
+
                     mainWindow.Show();
+
                 }
                 else
                 {
