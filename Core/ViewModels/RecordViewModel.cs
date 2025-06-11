@@ -6,7 +6,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
+using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
+using SANJET.Core.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -42,13 +44,21 @@ namespace SANJET.Core.ViewModels
         public ObservableCollection<DeviceRecord> DeviceRecords { get; } = new();
         public ICollectionView FilteredDeviceRecords { get; }
 
+        private readonly IDataSyncService _dataSyncService;
+
         // ViewModel 的建構函式，接收必要的依賴和資料
-        public RecordViewModel(DeviceViewModel deviceViewModel, AppDbContext dbContext, ILogger<RecordViewModel> logger, string currentUsername)
+        public RecordViewModel(
+        DeviceViewModel deviceViewModel,
+        AppDbContext dbContext,
+        ILogger<RecordViewModel> logger,
+        string currentUsername,
+        IDataSyncService dataSyncService)
         {
             _deviceViewModel = deviceViewModel;
             _dbContext = dbContext;
             _logger = logger;
             _currentUsername = currentUsername;
+            _dataSyncService = dataSyncService;
 
             // 初始化 CollectionView 用於篩選和排序
             FilteredDeviceRecords = CollectionViewSource.GetDefaultView(DeviceRecords);
@@ -104,12 +114,16 @@ namespace SANJET.Core.ViewModels
                     Timestamp = DateTime.Now
                 };
 
+                // 1. 先儲存到本地資料庫
                 _dbContext.DeviceRecords.Add(newRecord);
                 await _dbContext.SaveChangesAsync();
 
                 DeviceRecords.Insert(0, newRecord); // 新紀錄加到最前面
                 RecordContent = string.Empty; // 清空輸入框
                 _logger.LogInformation("已為設備 ID: {DeviceId} 添加新紀錄。", _deviceViewModel.Id);
+
+                // 2. 呼叫同步服務 (非同步執行，不阻礙UI)
+                _ = _dataSyncService.SyncRecordAdditionAsync(newRecord);
             }
             catch (Exception ex)
             {
@@ -130,26 +144,18 @@ namespace SANJET.Core.ViewModels
             var result = MessageBox.Show($"確定要刪除 ID 為 {SelectedRecord.Id} 的紀錄嗎？", "確認刪除", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
-            // 儲存要刪除的紀錄ID，以便稍後記錄
-            var recordIdToDelete = SelectedRecord.Id;
+            var recordToDelete = SelectedRecord; // 先將選擇的紀錄存起來
 
             try
             {
-                // **增加保護性檢查**
-                if (_dbContext == null)
-                {
-                    _logger?.LogError("DeleteRecordAsync failed because _dbContext is null.");
-                    MessageBox.Show("資料庫連線已遺失，無法刪除。", "嚴重錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                _dbContext.DeviceRecords.Remove(SelectedRecord);
+                // 1. 從本地刪除
+                _dbContext.DeviceRecords.Remove(recordToDelete);
                 await _dbContext.SaveChangesAsync();
+                DeviceRecords.Remove(recordToDelete);
+                _logger?.LogInformation("本地紀錄 ID: {RecordId} 已被刪除。", recordToDelete.Id);
 
-                DeviceRecords.Remove(SelectedRecord);
-
-                // 使用先前儲存的 ID 來記錄
-                _logger?.LogInformation("紀錄 ID: {RecordId} 已被刪除。", recordIdToDelete);
+                // 2. 呼叫同步服務進行刪除 (這部分需要更複雜的邏輯，如註解所述)
+                _ = _dataSyncService.SyncRecordDeletionAsync(recordToDelete.Id);
             }
             catch (Exception ex)
             {

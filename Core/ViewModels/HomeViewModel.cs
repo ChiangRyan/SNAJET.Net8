@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SANJET.Core.Interfaces;
+using SANJET.Core.Services;
+using SANJET.UI.Views.Windows;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
-using SANJET.UI.Views.Windows;
 
 namespace SANJET.Core.ViewModels
 {
@@ -358,11 +359,12 @@ namespace SANJET.Core.ViewModels
                 var dbContext = provider.GetRequiredService<AppDbContext>();
                 var recordLogger = provider.GetRequiredService<ILogger<RecordViewModel>>();
                 var authService = provider.GetRequiredService<IAuthenticationService>();
+                var dataSyncService = provider.GetRequiredService<IDataSyncService>();
 
                 var currentUser = authService.GetCurrentUser()?.Username ?? "未知使用者";
 
-                // 1. 建立 RecordViewModel
-                var recordViewModel = new RecordViewModel(this, dbContext, recordLogger, currentUser);
+                // 1. 建立 RecordViewModel，並傳入同步服務
+                var recordViewModel = new RecordViewModel(this, dbContext, recordLogger, currentUser, dataSyncService);
 
                 // 2. 建立 RecordWindow
                 var recordWindow = new RecordWindow(recordViewModel)

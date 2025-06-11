@@ -68,7 +68,7 @@ namespace SANJET
                     {
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
                         services.AddDbContext<AppDbContext>(options =>
-                            options.UseSqlite(context.Configuration.GetConnectionString("DefaultConnection")));
+                            options.UseSqlite(context.Configuration.GetConnectionString("LocalConnection")));
                        
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
@@ -85,6 +85,7 @@ namespace SANJET
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
+                        services.AddSingleton<IDataSyncService, DataSyncService>();
 
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();
@@ -113,7 +114,7 @@ namespace SANJET
 
                 // 顯示載入視窗
                 var loadingWindow = Host.Services.GetRequiredService<LoadingWindow>();
-                
+                loadingWindow.Show();
 
                 // 執行需要時間的啟動任務
                 bool isConnected = await CheckDatabaseConnectionAsync(Host, appLogger);
@@ -132,7 +133,7 @@ namespace SANJET
                     // 顯示主視窗。登入邏輯將由 MainWindow 的 Loaded 事件觸發。
                     var mainWindow = Host.Services.GetRequiredService<MainWindow>();
                     Application.Current.MainWindow = mainWindow; // 明確設定應用程式的主視窗
-                    loadingWindow.Show();
+                   
                     await Task.Delay(2500);
                     // 任務完成後關閉載入視窗
                     loadingWindow.Close();
@@ -152,6 +153,7 @@ namespace SANJET
                 var logger = Host?.Services.GetService<ILogger<App>>();
                 logger?.LogError(ex, "應用程式啟動時發生無法處理的錯誤");
                 MessageBox.Show($"啟動失敗：{ex.Message}\n{ex.StackTrace}", "致命錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                
                 Shutdown();
             }
         }
