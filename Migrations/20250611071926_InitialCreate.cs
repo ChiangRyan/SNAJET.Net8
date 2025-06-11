@@ -17,6 +17,7 @@ namespace SANJET.Migrations
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
+                    UniqueId = table.Column<Guid>(type: "TEXT", nullable: false),
                     DeviceId = table.Column<int>(type: "INTEGER", nullable: false),
                     DeviceName = table.Column<string>(type: "TEXT", nullable: false),
                     RunCount = table.Column<int>(type: "INTEGER", nullable: false),

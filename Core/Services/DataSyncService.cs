@@ -44,6 +44,7 @@ namespace SANJET.Core.Services
                 var recordForNas = new DeviceRecord
                 {
                     // 不複製主鍵 Id，讓NAS資料庫自動生成
+                    UniqueId = record.UniqueId, // 【新增】將 UniqueId 同步過去
                     DeviceId = record.DeviceId,
                     DeviceName = record.DeviceName,
                     RunCount = record.RunCount,
@@ -63,13 +64,33 @@ namespace SANJET.Core.Services
             }
         }
 
-        public async Task SyncRecordDeletionAsync(int recordId)
+        public async Task SyncRecordDeletionAsync(Guid recordUniqueId)
         {
-            _logger.LogWarning("刪除同步功能尚未實作。需要一個可靠的方法來對應本地和遠端的紀錄。");
-            // 刪除操作比較複雜，因為本地和遠端的紀錄ID不同。
-            // 一個可能的作法是新增一個 'Guid' 欄位作為兩邊共同的唯一識別碼。
-            // 或是根據 'DeviceName', 'Timestamp', 'Content' 等組合來尋找要刪除的遠端紀錄。
-            await Task.CompletedTask;
+            try
+            {
+                _logger.LogInformation("開始從 NAS 同步刪除紀錄 (UniqueId: {UniqueId})...", recordUniqueId);
+                using var nasDbContext = CreateNasDbContext(); // 建立 NAS 資料庫的連線
+
+                // 根據 UniqueId 找到 NAS 上的紀錄
+                var recordToDeleteOnNas = await nasDbContext.DeviceRecords
+                    .FirstOrDefaultAsync(r => r.UniqueId == recordUniqueId);
+
+                if (recordToDeleteOnNas != null)
+                {
+                    nasDbContext.DeviceRecords.Remove(recordToDeleteOnNas);
+                    await nasDbContext.SaveChangesAsync();
+                    _logger.LogInformation("成功從 NAS 刪除紀錄 (UniqueId: {UniqueId})。", recordUniqueId);
+                }
+                else
+                {
+                    _logger.LogWarning("在 NAS 上找不到要刪除的紀錄 (UniqueId: {UniqueId})，可能已被刪除。", recordUniqueId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "從 NAS 同步刪除紀錄 (UniqueId: {UniqueId}) 時失敗。", recordUniqueId);
+            }
         }
+
     }
 }

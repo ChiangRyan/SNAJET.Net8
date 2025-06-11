@@ -11,7 +11,7 @@ using SANJET.Core;
 namespace SANJET.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250609053241_InitialCreate")]
+    [Migration("20250611071926_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -77,6 +77,9 @@ namespace SANJET.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("Timestamp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UniqueId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Username")

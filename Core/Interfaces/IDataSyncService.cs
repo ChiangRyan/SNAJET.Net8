@@ -7,7 +7,7 @@ namespace SANJET.Core.Interfaces
     public interface IDataSyncService
     {
         Task SyncRecordAdditionAsync(DeviceRecord record);
-        Task SyncRecordDeletionAsync(int recordId);
+        Task SyncRecordDeletionAsync(Guid recordUniqueId);
         // 如果需要，可以添加更新的方法
         // Task SyncRecordUpdateAsync(DeviceRecord record);
     }

@@ -83,18 +83,20 @@
         </Grid>
 
         <!-- 記錄數據表格 -->
-        <DataGrid Grid.Row="1" 
-			ItemsSource="{Binding FilteredDeviceRecords}" 
-			SelectedItem="{Binding SelectedRecord}"
-			SelectionMode="Single"
-			AutoGenerateColumns="False" 
-			CanUserAddRows="False"
-			IsReadOnly="True"
-			AlternatingRowBackground="AliceBlue"
-			FontSize="18">
+        <DataGrid Grid.Row="1"
+          x:Name="RecordsDataGrid"
+          ItemsSource="{Binding FilteredDeviceRecords}"
+          SelectedItem="{Binding SelectedRecord}"
+          SelectionMode="Single"
+          AutoGenerateColumns="False"
+          CanUserAddRows="False"
+          IsReadOnly="True"
+          AlternatingRowBackground="AliceBlue"
+          FontSize="18"
+          LoadingRow="RecordsDataGrid_LoadingRow">
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="排序" Binding="{Binding Id}" Width="50"/>
+                
                 <DataGridTextColumn Header="時間" Binding="{Binding Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Width="*" SortDirection="Descending"/>
                 <DataGridTextColumn Header="機種" Binding="{Binding DeviceName}" Width="*"/>
                 <DataGridTextColumn Header="跑合" Binding="{Binding RunCount}" Width="*"/>
@@ -108,7 +110,7 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>
-
+        
         <!-- 操作按鈕組 -->
         <StackPanel Grid.Row="2" 
                   Orientation="Horizontal" 

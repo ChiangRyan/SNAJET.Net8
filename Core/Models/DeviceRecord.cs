@@ -10,6 +10,9 @@ namespace SANJET.Core.Models
     {
         [Key]
         public int Id { get; set; }
+        // 【新增】這是一個全域唯一的識別碼，用於跨資料庫同步
+
+        public Guid UniqueId { get; set; }
 
         /// <summary>
         /// 關聯的設備 ID。

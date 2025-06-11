@@ -29,6 +29,7 @@ namespace SANJET.Core.ViewModels
         private readonly DeviceViewModel _deviceViewModel; // 關聯的設備 ViewModel
         private readonly string _currentUsername;
 
+
         [ObservableProperty]
         private string _recordContent = string.Empty;
 
@@ -106,6 +107,7 @@ namespace SANJET.Core.ViewModels
             {
                 var newRecord = new DeviceRecord
                 {
+                    UniqueId = Guid.NewGuid(), // 【新增】在建立時就產生一個唯一的ID
                     DeviceId = _deviceViewModel.Id,
                     DeviceName = _deviceViewModel.Name, // 使用 ViewModel 的當前名稱
                     RunCount = _deviceViewModel.RunCount, // 使用 ViewModel 的當前運轉次數
@@ -154,8 +156,8 @@ namespace SANJET.Core.ViewModels
                 DeviceRecords.Remove(recordToDelete);
                 _logger?.LogInformation("本地紀錄 ID: {RecordId} 已被刪除。", recordToDelete.Id);
 
-                // 2. 呼叫同步服務進行刪除 (這部分需要更複雜的邏輯，如註解所述)
-                _ = _dataSyncService.SyncRecordDeletionAsync(recordToDelete.Id);
+                // 2. 呼叫同步服務進行刪除，【修改】傳遞 UniqueId
+                _ = _dataSyncService.SyncRecordDeletionAsync(recordToDelete.UniqueId);
             }
             catch (Exception ex)
             {
@@ -235,6 +237,7 @@ namespace SANJET.Core.ViewModels
                 // 根據您舊程式碼的邏輯，從第 4 列開始填寫資料
                 int startRow = 4;
                 int currentRow = startRow;
+                int rowNumber = 1; // 新增一個從 1 開始的計數器
 
                 // 根據時間升序排序，以便舊紀錄在前面
                 var recordsToExport = FilteredDeviceRecords.Cast<DeviceRecord>().OrderBy(r => r.Timestamp);
@@ -242,7 +245,7 @@ namespace SANJET.Core.ViewModels
                 foreach (var record in recordsToExport)
                 {
                     // 根據模板的欄位填入資料
-                    worksheet.Cells[currentRow, 1].Value = record.Id;       // A欄: 排序
+                    worksheet.Cells[currentRow, 1].Value = rowNumber++;       // A欄: 排序
                     worksheet.Cells[currentRow, 2].Value = record.Timestamp;// B欄: 日期時間
                     worksheet.Cells[currentRow, 2].Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
                     worksheet.Cells[currentRow, 3].Value = record.DeviceName; // C欄: 機種
