@@ -22,6 +22,7 @@ namespace SANJET.Core.ViewModels
         private readonly ILogger<HomeViewModel> _logger;
         private readonly MainViewModel? _mainViewModel;
         private readonly IDataSyncService _dataSyncService;
+        private readonly IAudioService _audioService;
 
         [ObservableProperty]
         private ObservableCollection<DeviceViewModel> devices = new();
@@ -29,11 +30,16 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private bool canControlDevice;
 
-        public HomeViewModel(AppDbContext dbContext, ILogger<HomeViewModel> logger,IDataSyncService dataSyncService)
+        public HomeViewModel(
+            AppDbContext dbContext, 
+            ILogger<HomeViewModel> logger,
+            IDataSyncService dataSyncService,
+            IAudioService audioService)
         {
             _dbContext = dbContext;
             _logger = logger;
             _dataSyncService = dataSyncService;
+            _audioService = audioService;
             _mainViewModel = App.Host?.Services.GetService<MainViewModel>();
         }
 
@@ -48,7 +54,7 @@ namespace SANJET.Core.ViewModels
             var devicesFromDb = await _dbContext.Devices.ToListAsync();
             foreach (var deviceEntity in devicesFromDb)
             {
-                var deviceVm = new DeviceViewModel(this, _mainViewModel, _logger)
+                var deviceVm = new DeviceViewModel(this, _mainViewModel, _logger, _audioService)
                 {
                     Id = deviceEntity.Id,
                     Name = deviceEntity.Name,
@@ -191,6 +197,7 @@ namespace SANJET.Core.ViewModels
         private readonly HomeViewModel? _homeViewModel;
         private readonly MainViewModel? _mainViewModel;
         private readonly ILogger? _logger;
+        private readonly IAudioService? _audioService;
 
         [ObservableProperty]
         private int id;
@@ -227,11 +234,12 @@ namespace SANJET.Core.ViewModels
         private const ushort MODBUS_VALUE_START = 1;
         private const ushort MODBUS_VALUE_STOP = 0;
 
-        public DeviceViewModel(HomeViewModel homeViewModel, MainViewModel? mainViewModel, ILogger? logger)
+        public DeviceViewModel(HomeViewModel homeViewModel, MainViewModel? mainViewModel, ILogger? logger, IAudioService? audioService)
         {
             _homeViewModel = homeViewModel;
             _mainViewModel = mainViewModel;
             _logger = logger;
+            _audioService = audioService; // <--- 儲存服務
         }
 
         public DeviceViewModel()
@@ -239,6 +247,7 @@ namespace SANJET.Core.ViewModels
             _homeViewModel = App.Host?.Services.GetService<HomeViewModel>();
             _mainViewModel = App.Host?.Services.GetService<MainViewModel>();
             _logger = App.Host?.Services.GetService<ILogger<DeviceViewModel>>();
+            _audioService = App.Host?.Services.GetService<IAudioService>(); 
         }
 
         partial void OnIsOperationalChanged(bool value)
@@ -311,6 +320,12 @@ namespace SANJET.Core.ViewModels
             if (success)
             {
                 _logger?.LogInformation("已為 Slave ID {SlaveId} (由 ESP32 {Esp32Id}) 發送啟動命令。", SlaveId, ControllingEsp32MqttId);
+                // ===== 在成功發送命令後，呼叫音訊服務 =====
+                // 使用 _ = 來 "fire-and-forget"，不等待音訊播放完成，立即返回
+                if (_audioService != null)
+                {
+                    _ = _audioService.PlayStartSoundAsync();
+                }
             }
             else
             {
@@ -342,6 +357,10 @@ namespace SANJET.Core.ViewModels
             if (success)
             {
                 _logger?.LogInformation("已為 Slave ID {SlaveId} (由 ESP32 {Esp32Id}) 發送停止命令。", SlaveId, ControllingEsp32MqttId);
+                if (_audioService != null)
+                {
+                    _ = _audioService.PlayStopSoundAsync();
+                }
             }
             else
             {

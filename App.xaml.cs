@@ -86,6 +86,7 @@ namespace SANJET
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
                         services.AddSingleton<IDataSyncService, DataSyncService>();
+                        services.AddSingleton<IAudioService, AudioService>();
 
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();
@@ -205,8 +206,19 @@ namespace SANJET
                 {
                     logger.LogInformation("Devices 表為空，開始插入預設設備資料...");
                     dbContext.Devices.AddRange(
-                        new Device { Name = "預設設備1", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 1, Status = "閒置", IsOperational = true, RunCount = 0 },
-                        new Device { Name = "預設設備2", ControllingEsp32MqttId = "ESP32_MdTCP", SlaveId = 1, Status = "運行中", IsOperational = true, RunCount = 150 }
+                        new Device { Name = "DKSS", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 1, Status = "閒置", IsOperational = true, RunCount = 0 },
+                        new Device { Name = "HBC2", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 2, Status = "閒置", IsOperational = true, RunCount = 0 },
+                        new Device { Name = "DVC雙層", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 3, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備4", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 4, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備5", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 5, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備6", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 6, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備7", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 7, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備8", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 8, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備9", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 9, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備10", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 10, Status = "閒置", IsOperational = false, RunCount = 0 },
+                        new Device { Name = "預設設備11", ControllingEsp32MqttId = "ESP32_RS485", SlaveId = 11, Status = "閒置", IsOperational = false, RunCount = 0 },
+
+                        new Device { Name = "SRP02位移", ControllingEsp32MqttId = "ESP32_MdTCP", SlaveId = 1, Status = "閒置", IsOperational = true, RunCount = 0 }
                     );
                 }
                 else

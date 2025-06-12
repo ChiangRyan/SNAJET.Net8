@@ -12,7 +12,7 @@
     <Page.Resources>
         <!-- 統一 TextBlock 樣式 -->
         <Style x:Key="MyTextBlockStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Foreground" Value="Black"/>
@@ -22,8 +22,8 @@
         <Style x:Key="MyButtonStyle" TargetType="Button">
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Width" Value="100"/>
-            <Setter Property="Height" Value="70"/>
+            <Setter Property="Width" Value="70"/>
+            <Setter Property="Height" Value="50"/>
             <Setter Property="Margin" Value="5,0,5,0"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="DarkSlateGray"/>
@@ -34,7 +34,7 @@
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Width" Value="50"/>
-            <Setter Property="Height" Value="30"/>
+            <Setter Property="Height" Value="25"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="DarkSlateGray"/>
@@ -96,7 +96,7 @@
 
         <!-- 統一 CheckBox 樣式 -->
         <Style x:Key="MyCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="5,0,0,0"/>
             <Setter Property="Foreground" Value="Black"/>
@@ -104,7 +104,7 @@
             <!-- 使用 LayoutTransform 整體縮放 -->
             <Setter Property="LayoutTransform">
                 <Setter.Value>
-                    <ScaleTransform ScaleX="2" ScaleY="2"/>
+                    <ScaleTransform ScaleX="1.5" ScaleY="1.5"/>
                     <!-- 調整縮放比例 -->
                 </Setter.Value>
             </Setter>
@@ -164,8 +164,8 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                 <TextBlock Text="名稱：" Style="{StaticResource MyTextBlockStyle}" VerticalAlignment="Center"/>
                                 <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
-                                     FontSize="20" 
-                                     Width="120" 
+                                     FontSize="16" 
+                                     Width="90" 
                                      VerticalAlignment="Center"
                                      IsReadOnly="{Binding IsEditingName, Converter={StaticResource BooleanInverterConverter}}"/>            
 
