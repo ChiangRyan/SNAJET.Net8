@@ -1,19 +1,15 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using OfficeOpenXml;
-using OfficeOpenXml.Style;
 using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
-using SANJET.Core.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -26,15 +22,16 @@ namespace SANJET.Core.ViewModels
     {
         private readonly AppDbContext _dbContext;
         private readonly ILogger<RecordViewModel> _logger;
-        private readonly DeviceViewModel _deviceViewModel; // 關聯的設備 ViewModel
+        private readonly DeviceViewModel _deviceViewModel;
         private readonly string _currentUsername;
-
+        private readonly IDataSyncService _dataSyncService;
 
         [ObservableProperty]
         private string _recordContent = string.Empty;
 
+        // 【修改】SelectedItem 的類型現在是新的包裝類別
         [ObservableProperty]
-        private DeviceRecord? _selectedRecord;
+        private RecordDisplayItemViewModel? _selectedRecord;
 
         [ObservableProperty]
         private string? _filterUsername;
@@ -42,18 +39,16 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private DateTime? _filterStartDate;
 
-        public ObservableCollection<DeviceRecord> DeviceRecords { get; } = new();
+        // 【修改】ObservableCollection 的類型現在是新的包裝類別
+        public ObservableCollection<RecordDisplayItemViewModel> DeviceRecords { get; } = new();
         public ICollectionView FilteredDeviceRecords { get; }
 
-        private readonly IDataSyncService _dataSyncService;
-
-        // ViewModel 的建構函式，接收必要的依賴和資料
         public RecordViewModel(
-        DeviceViewModel deviceViewModel,
-        AppDbContext dbContext,
-        ILogger<RecordViewModel> logger,
-        string currentUsername,
-        IDataSyncService dataSyncService)
+            DeviceViewModel deviceViewModel,
+            AppDbContext dbContext,
+            ILogger<RecordViewModel> logger,
+            string currentUsername,
+            IDataSyncService dataSyncService)
         {
             _deviceViewModel = deviceViewModel;
             _dbContext = dbContext;
@@ -61,29 +56,31 @@ namespace SANJET.Core.ViewModels
             _currentUsername = currentUsername;
             _dataSyncService = dataSyncService;
 
-            // 初始化 CollectionView 用於篩選和排序
             FilteredDeviceRecords = CollectionViewSource.GetDefaultView(DeviceRecords);
-            FilteredDeviceRecords.SortDescriptions.Add(new SortDescription("Timestamp", ListSortDirection.Descending));
+            // 【修改】預設排序現在基於包裝類別的 Record.Timestamp 屬性
+            FilteredDeviceRecords.SortDescriptions.Add(new SortDescription("Record.Timestamp", ListSortDirection.Descending));
             FilteredDeviceRecords.Filter = FilterRecords;
 
-            // 非同步加載初始資料
             _ = LoadRecordsAsync();
         }
 
+        // 【修改】整個 LoadRecordsAsync 方法的邏輯
         private async Task LoadRecordsAsync()
         {
             try
             {
                 _logger.LogInformation("正在為設備 ID: {DeviceId} 加載紀錄...", _deviceViewModel.Id);
-                DeviceRecords.Clear();
-                var records = await _dbContext.DeviceRecords
+                var recordsFromDb = await _dbContext.DeviceRecords
                     .Where(r => r.DeviceId == _deviceViewModel.Id)
-                    .OrderByDescending(r => r.Timestamp)
+                    .OrderByDescending(r => r.Timestamp) // 先從資料庫按時間倒序取出
                     .ToListAsync();
 
-                foreach (var record in records)
+                DeviceRecords.Clear();
+                int rowNum = 1;
+                foreach (var record in recordsFromDb)
                 {
-                    DeviceRecords.Add(record);
+                    // 將每筆紀錄包裝成 RecordDisplayItemViewModel 並給予行號
+                    DeviceRecords.Add(new RecordDisplayItemViewModel(rowNum++, record));
                 }
                 _logger.LogInformation("成功為設備 ID: {DeviceId} 加載了 {Count} 筆紀錄。", _deviceViewModel.Id, DeviceRecords.Count);
             }
@@ -107,24 +104,23 @@ namespace SANJET.Core.ViewModels
             {
                 var newRecord = new DeviceRecord
                 {
-                    UniqueId = Guid.NewGuid(), // 【新增】在建立時就產生一個唯一的ID
+                    UniqueId = Guid.NewGuid(),
                     DeviceId = _deviceViewModel.Id,
-                    DeviceName = _deviceViewModel.Name, // 使用 ViewModel 的當前名稱
-                    RunCount = _deviceViewModel.RunCount, // 使用 ViewModel 的當前運轉次數
+                    DeviceName = _deviceViewModel.Name,
+                    RunCount = _deviceViewModel.RunCount,
                     Username = _currentUsername,
                     Content = RecordContent.Trim(),
                     Timestamp = DateTime.Now
                 };
 
-                // 1. 先儲存到本地資料庫
                 _dbContext.DeviceRecords.Add(newRecord);
                 await _dbContext.SaveChangesAsync();
 
-                DeviceRecords.Insert(0, newRecord); // 新紀錄加到最前面
-                RecordContent = string.Empty; // 清空輸入框
+                // 【修改】新增後，重新整理整個列表以確保行號正確
+                await LoadRecordsAsync();
+                RecordContent = string.Empty;
                 _logger.LogInformation("已為設備 ID: {DeviceId} 添加新紀錄。", _deviceViewModel.Id);
 
-                // 2. 呼叫同步服務 (非同步執行，不阻礙UI)
                 _ = _dataSyncService.SyncRecordAdditionAsync(newRecord);
             }
             catch (Exception ex)
@@ -137,47 +133,36 @@ namespace SANJET.Core.ViewModels
         [RelayCommand(CanExecute = nameof(CanAddOrDeleteRecord))]
         private async Task DeleteRecordAsync()
         {
-            if (SelectedRecord == null)
-            {
-                MessageBox.Show("請先選擇要刪除的紀錄。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+            if (SelectedRecord == null) return;
 
-            var result = MessageBox.Show($"確定要刪除 ID 為 {SelectedRecord.Id} 的紀錄嗎？", "確認刪除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = MessageBox.Show($"確定要刪除嗎？", "確認刪除", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
-            var recordToDelete = SelectedRecord; // 先將選擇的紀錄存起來
+            // 【修改】從包裝類別中取出要刪除的原始紀錄
+            var recordToDelete = SelectedRecord.Record;
 
             try
             {
-                // 1. 從本地刪除
                 _dbContext.DeviceRecords.Remove(recordToDelete);
                 await _dbContext.SaveChangesAsync();
-                DeviceRecords.Remove(recordToDelete);
                 _logger?.LogInformation("本地紀錄 ID: {RecordId} 已被刪除。", recordToDelete.Id);
 
-                // 2. 呼叫同步服務進行刪除，【修改】傳遞 UniqueId
+                // 【修改】刪除後，重新載入整個列表以更新行號
+                await LoadRecordsAsync();
+
                 _ = _dataSyncService.SyncRecordDeletionAsync(recordToDelete.UniqueId);
             }
             catch (Exception ex)
             {
-                // **主要修正：使用 ?. 來安全地呼叫日誌**
                 _logger?.LogError(ex, "刪除紀錄時出錯。");
                 MessageBox.Show($"刪除紀錄失敗: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private bool CanAddOrDeleteRecord()
-        {
-            // 可以在此加入權限判斷
-            return true;
-        }
+        private bool CanAddOrDeleteRecord() => true;
 
         [RelayCommand]
-        private void ApplyFilter()
-        {
-            FilteredDeviceRecords.Refresh();
-        }
+        private void ApplyFilter() => FilteredDeviceRecords.Refresh();
 
         [RelayCommand]
         private void ResetFilter()
@@ -187,16 +172,16 @@ namespace SANJET.Core.ViewModels
             FilteredDeviceRecords.Refresh();
         }
 
+        // 【修改】篩選邏輯現在作用於包裝類別的 Record 屬性
         private bool FilterRecords(object item)
         {
-            if (item is not DeviceRecord record) return false;
+            if (item is not RecordDisplayItemViewModel displayItem) return false;
+            var record = displayItem.Record;
 
             bool isUserMatch = string.IsNullOrWhiteSpace(FilterUsername) ||
                                (record.Username?.Contains(FilterUsername, StringComparison.OrdinalIgnoreCase) ?? false);
-
             bool isDateMatch = !FilterStartDate.HasValue ||
                                record.Timestamp.Date >= FilterStartDate.Value.Date;
-
             return isUserMatch && isDateMatch;
         }
 
@@ -237,21 +222,21 @@ namespace SANJET.Core.ViewModels
                 // 根據您舊程式碼的邏輯，從第 4 列開始填寫資料
                 int startRow = 4;
                 int currentRow = startRow;
-                int rowNumber = 1; // 新增一個從 1 開始的計數器
+
 
                 // 根據時間升序排序，以便舊紀錄在前面
-                var recordsToExport = FilteredDeviceRecords.Cast<DeviceRecord>().OrderBy(r => r.Timestamp);
+                var recordsToExport = FilteredDeviceRecords.Cast<RecordDisplayItemViewModel>().OrderBy(r => r.RowNumber);
 
-                foreach (var record in recordsToExport)
+                foreach (var displayItem in recordsToExport)
                 {
-                    // 根據模板的欄位填入資料
-                    worksheet.Cells[currentRow, 1].Value = rowNumber++;       // A欄: 排序
-                    worksheet.Cells[currentRow, 2].Value = record.Timestamp;// B欄: 日期時間
+                    var record = displayItem.Record; // 從包裝類中取得原始紀錄
+                    worksheet.Cells[currentRow, 1].Value = displayItem.RowNumber; // A欄: 排序
+                    worksheet.Cells[currentRow, 2].Value = record.Timestamp;
                     worksheet.Cells[currentRow, 2].Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
-                    worksheet.Cells[currentRow, 3].Value = record.DeviceName; // C欄: 機種
-                    worksheet.Cells[currentRow, 4].Value = record.RunCount;   // D欄: 跑合
-                    worksheet.Cells[currentRow, 5].Value = record.Content;    // E欄: 測試狀況
-                    worksheet.Cells[currentRow, 6].Value = record.Username;   // F欄: 使用者
+                    worksheet.Cells[currentRow, 3].Value = record.DeviceName;
+                    worksheet.Cells[currentRow, 4].Value = record.RunCount;
+                    worksheet.Cells[currentRow, 5].Value = record.Content;
+                    worksheet.Cells[currentRow, 6].Value = record.Username;
                     currentRow++;
                 }
 

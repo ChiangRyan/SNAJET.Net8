@@ -92,16 +92,22 @@
           CanUserAddRows="False"
           IsReadOnly="True"
           AlternatingRowBackground="AliceBlue"
-          FontSize="18"
-          LoadingRow="RecordsDataGrid_LoadingRow">
+          FontSize="18">
 
             <DataGrid.Columns>
-                
-                <DataGridTextColumn Header="時間" Binding="{Binding Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Width="*" SortDirection="Descending"/>
-                <DataGridTextColumn Header="機種" Binding="{Binding DeviceName}" Width="*"/>
-                <DataGridTextColumn Header="跑合" Binding="{Binding RunCount}" Width="*"/>
-                <DataGridTextColumn Header="測試狀況" Binding="{Binding Content}" Width="2*"/>
-                <DataGridTextColumn Header="使用者" Binding="{Binding Username}" Width="*"/>
+                <DataGridTextColumn Header="排序" Binding="{Binding RowNumber}" Width="Auto">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextAlignment" Value="Center"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <DataGridTextColumn Header="時間" Binding="{Binding Record.Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" SortMemberPath="Record.Timestamp" Width="*" SortDirection="Descending"/>
+                <DataGridTextColumn Header="機種" Binding="{Binding Record.DeviceName}" SortMemberPath="Record.DeviceName" Width="*"/>
+                <DataGridTextColumn Header="跑合" Binding="{Binding Record.RunCount}" SortMemberPath="Record.RunCount" Width="*"/>
+                <DataGridTextColumn Header="測試狀況" Binding="{Binding Record.Content}" Width="2*"/>
+                <DataGridTextColumn Header="使用者" Binding="{Binding Record.Username}" SortMemberPath="Record.Username" Width="*"/>
             </DataGrid.Columns>
 
             <DataGrid.ContextMenu>

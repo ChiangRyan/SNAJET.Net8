@@ -16,13 +16,5 @@ namespace SANJET.UI.Views.Windows
             DataContext = viewModel;
         }
 
-        // 【新增這個方法】
-        // 當 DataGrid 的每一行在載入時，這個事件會被觸發
-        private void RecordsDataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
-        {
-            // 設定每一行最前面的標頭 (RowHeader) 為它的索引值+1
-            // 這樣就會顯示 1, 2, 3...
-            e.Row.Header = (e.Row.GetIndex() + 1).ToString();
-        }
     }
 }
