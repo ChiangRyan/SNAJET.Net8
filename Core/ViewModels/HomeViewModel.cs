@@ -1,4 +1,4 @@
-﻿// Path: Core/ViewModels/HomeViewModel.cs
+﻿
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +21,7 @@ namespace SANJET.Core.ViewModels
         private readonly AppDbContext _dbContext;
         private readonly ILogger<HomeViewModel> _logger;
         private readonly MainViewModel? _mainViewModel;
+        private readonly IDataSyncService _dataSyncService;
 
         [ObservableProperty]
         private ObservableCollection<DeviceViewModel> devices = new();
@@ -28,10 +29,11 @@ namespace SANJET.Core.ViewModels
         [ObservableProperty]
         private bool canControlDevice;
 
-        public HomeViewModel(AppDbContext dbContext, ILogger<HomeViewModel> logger)
+        public HomeViewModel(AppDbContext dbContext, ILogger<HomeViewModel> logger,IDataSyncService dataSyncService)
         {
             _dbContext = dbContext;
             _logger = logger;
+            _dataSyncService = dataSyncService;
             _mainViewModel = App.Host?.Services.GetService<MainViewModel>();
         }
 
@@ -79,6 +81,15 @@ namespace SANJET.Core.ViewModels
                 deviceInDb.IsOperational = deviceVm.IsOperational;
                 _dbContext.Devices.Update(deviceInDb);
                 await _dbContext.SaveChangesAsync();
+
+                // ===== 新增呼叫同步服務的程式碼 =====
+                if (_dataSyncService != null)
+                {
+                    // 將更新後的實體傳遞給同步服務
+                    await _dataSyncService.SyncDeviceChangeAsync(deviceInDb);
+                }
+                // ===================================
+
                 deviceVm.OriginalName = deviceVm.Name;
                 _logger.LogInformation("已保存設備 ID {DeviceId} 的變更。", deviceVm.Id);
             }

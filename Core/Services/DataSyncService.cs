@@ -92,5 +92,88 @@ namespace SANJET.Core.Services
             }
         }
 
+        public async Task SyncDeviceChangeAsync(Device device)
+        {
+            try
+            {
+                _logger.LogInformation("開始同步設備 (ID: {DeviceId}, Name: {DeviceName}) 的變更到 NAS...", device.Id, device.Name);
+                using var nasDbContext = CreateNasDbContext();
+
+                // 檢查 NAS 上是否已存在該設備
+                var deviceOnNas = await nasDbContext.Devices.FirstOrDefaultAsync(d => d.Id == device.Id);
+
+                if (deviceOnNas != null)
+                {
+                    // 如果存在，則更新屬性
+                    _logger.LogInformation("在 NAS 上找到設備 ID: {DeviceId}，進行更新。", device.Id);
+                    // 手動更新屬性，避免 EF Core 追蹤問題
+                    deviceOnNas.Name = device.Name;
+                    deviceOnNas.SlaveId = device.SlaveId;
+                    deviceOnNas.Status = device.Status; // 也可以同步狀態
+                    deviceOnNas.IsOperational = device.IsOperational;
+                    deviceOnNas.RunCount = device.RunCount; // 也可以同步運轉次數
+                    deviceOnNas.ControllingEsp32MqttId = device.ControllingEsp32MqttId;
+                    deviceOnNas.Timestamp = DateTime.Now; // 更新時間戳
+                }
+                else
+                {
+                    // 如果不存在，則新增一筆
+                    _logger.LogInformation("在 NAS 上找不到設備 ID: {DeviceId}，將其作為新設備新增。", device.Id);
+                    // 關鍵：因為是單向同步，我們直接使用本地的 Id。
+                    // 這需要確保 NAS 上的 Device 表主鍵不是自動遞增，或者允許身份插入。
+                    // 對於 SQLite，這通常是可行的。
+                    var newDeviceForNas = new Device
+                    {
+                        Id = device.Id, // 直接使用本地 ID
+                        Name = device.Name,
+                        SlaveId = device.SlaveId,
+                        Status = device.Status,
+                        IsOperational = device.IsOperational,
+                        RunCount = device.RunCount,
+                        ControllingEsp32MqttId = device.ControllingEsp32MqttId,
+                        Timestamp = DateTime.Now
+                    };
+                    // 為了讓 EF Core 知道我們要插入一個帶有指定主鍵的新實體
+                    nasDbContext.Add(newDeviceForNas).State = EntityState.Added;
+                }
+
+                await nasDbContext.SaveChangesAsync();
+                _logger.LogInformation("成功將設備 (ID: {DeviceId}) 的變更同步到 NAS。", device.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "同步設備 (ID: {DeviceId}) 到 NAS 時失敗。", device.Id);
+            }
+        }
+
+        public async Task SyncDeviceDeletionAsync(int deviceId)
+        {
+            try
+            {
+                _logger.LogInformation("開始從 NAS 同步刪除設備 (ID: {DeviceId})...", deviceId);
+                using var nasDbContext = CreateNasDbContext();
+
+                var deviceToDeleteOnNas = await nasDbContext.Devices.FindAsync(deviceId);
+
+                if (deviceToDeleteOnNas != null)
+                {
+                    nasDbContext.Devices.Remove(deviceToDeleteOnNas);
+                    await nasDbContext.SaveChangesAsync();
+                    _logger.LogInformation("成功從 NAS 刪除設備 (ID: {DeviceId})。", deviceId);
+                }
+                else
+                {
+                    _logger.LogWarning("在 NAS 上找不到要刪除的設備 (ID: {DeviceId})，可能已被刪除。", deviceId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "從 NAS 同步刪除設備 (ID: {DeviceId}) 時失敗。", deviceId);
+            }
+        }
+
+
+
+
     }
 }
