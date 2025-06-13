@@ -11,6 +11,7 @@ using SANJET.Core.Services;
 using SANJET.Core.ViewModels;
 using SANJET.UI.Views.Windows;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -69,7 +70,29 @@ namespace SANJET
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
                         services.AddDbContext<AppDbContext>(options =>
                             options.UseSqlite(context.Configuration.GetConnectionString("LocalConnection")));
-                       
+
+                        // 1. 取得 Local AppData 的路徑 (例如 C:\Users\YourUser\AppData\Local)
+                        var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+                        // 2. 在 LocalAppData 中為您的應用程式建立一個專屬資料夾的路徑
+                        var appDataPath = Path.Combine(localAppDataPath, "SanjetScada");
+
+                        // 3. 確保這個資料夾存在
+                        Directory.CreateDirectory(appDataPath);
+
+                        // 4. 組合出資料庫檔案的完整路徑
+                        var dbPath = Path.Combine(appDataPath, "SNAJET_local.db");
+
+                        // 5. 建立新的連接字串
+                        var connectionString = $"Data Source={dbPath}";
+
+                        var loggerForDb = services.BuildServiceProvider().GetService<ILogger<App>>();
+                        loggerForDb?.LogInformation("本地資料庫路徑設定為: {DbPath}", dbPath);
+
+                        // 6. 使用新的、包含絕對路徑的連接字串
+                        services.AddDbContext<AppDbContext>(options =>
+                            options.UseSqlite(connectionString));
+
                         services.AddScoped<MainViewModel>();
                         services.AddScoped<HomeViewModel>();
                         services.AddScoped<SettingsPageViewModel>();
