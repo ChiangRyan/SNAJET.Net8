@@ -200,20 +200,42 @@
         </Border>
 
         <!-- 新增按鈕列 -->
-        <StackPanel Grid.Row="1" 
-                    Orientation="Horizontal" 
-                    Height="30"
-                    VerticalAlignment="Center"
-                    Visibility="{Binding CanAll, Converter={StaticResource BooleanToVisibilityConverter}}">
-      
-            <StatusBar DockPanel.Dock="Bottom">
-                <StatusBarItem>
-                    <TextBlock Text="{Binding Esp32ConnectionStatus}" />
-                </StatusBarItem>
-            </StatusBar>
-            
-        </StackPanel>
+        <ItemsControl Grid.Row="1" 
+              ItemsSource="{Binding Esp32Devices}"
+              Visibility="{Binding CanViewHome, Converter={StaticResource BooleanToVisibilityConverter}}"
+              >
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
 
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="5,2" Padding="8,4" CornerRadius="4" BorderThickness="1" >
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ConnectionStatus}" Value="在線">
+                                        <Setter Property="Background" Value="#1E8449"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ConnectionStatus}" Value="離線">
+                                        <Setter Property="Background" Value="#C0392B"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Foreground="White" FontSize="12">
+                    <Run Text="{Binding DeviceId, Mode=OneWay}"/>
+                    <Run Text=": "/>
+                    <Run Text="{Binding ConnectionStatus, Mode=OneWay}"/>
+                        </TextBlock>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        
         <!-- 主內容區域 -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>

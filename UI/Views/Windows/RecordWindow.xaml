@@ -6,7 +6,6 @@
         mc:Ignorable="d"
         Title="設備紀錄" Height="700" Width="1500" WindowStartupLocation="CenterScreen">
     <Window.Resources>
-        <!-- 按鈕統一樣式 -->
         <Style x:Key="DarkButtonStyle" TargetType="Button">
             <Setter Property="Padding" Value="25,15"/>
             <Setter Property="MinWidth" Value="100"/>
@@ -18,9 +17,9 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border" 
-                              CornerRadius="4"
-                              Background="{TemplateBinding Background}"
-                              Opacity="0.9">
+                                CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                Opacity="0.9">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -38,10 +37,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- 輸入區域和篩選區域 -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -50,14 +47,38 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- 記錄內容輸入 -->
             <TextBlock Grid.Row="0" Text="記錄內容:" Margin="0,0,0,5" FontSize="18"/>
-            <TextBox Grid.Row="1" Text="{Binding RecordContent, UpdateSourceTrigger=PropertyChanged}" 
-             AcceptsReturn="True" TextWrapping="Wrap" 
-             Height="50" Margin="0,0,0,10" FontSize="16"/>
 
-            <!-- 篩選區域 -->
-            <Grid Grid.Row="2" Margin="0,10,0,10">
+            <Grid Grid.Row="1" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0" Text="{Binding RecordContent, UpdateSourceTrigger=PropertyChanged}" 
+                     AcceptsReturn="True" TextWrapping="Wrap" 
+                     Height="120"  FontSize="16" VerticalContentAlignment="Top"/>
+
+                <StackPanel Grid.Column="1" 
+                            Orientation="Vertical" 
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Right"
+                            Margin="10,0,0,0">
+                    <Button Content="添加記錄" 
+                            Command="{Binding AddRecordCommand}" 
+                            Style="{StaticResource DarkButtonStyle}"
+                            Background="#2980B9"
+                            Margin="0,0,0,10"/>
+
+                    <Button Content="導出Excel" 
+                            Command="{Binding ExportToExcelCommand}" 
+                            Style="{StaticResource DarkButtonStyle}"
+                            Background="#FF9900"/>
+                </StackPanel>
+            </Grid>
+
+
+            <Grid Grid.Row="2" Margin="0,5,0,5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="200"/>
@@ -67,32 +88,34 @@
 
                 <TextBlock Grid.Column="0" Text="使用者:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="16"/>
                 <TextBox Grid.Column="1" Text="{Binding FilterUsername, UpdateSourceTrigger=PropertyChanged}" 
-                 Margin="0,0,10,0" FontSize="16"/>
+                         Margin="0,0,10,0" FontSize="16"/>
 
                 <TextBlock Grid.Column="2" Text="開始日期:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="16"/>
                 <DatePicker Grid.Column="3" SelectedDate="{Binding FilterStartDate}" Margin="0,0,10,0" FontSize="16"/>
             </Grid>
 
-            <Button Grid.Row="3" Content="篩選" Command="{Binding ApplyFilterCommand}" 
-                Style="{StaticResource DarkButtonStyle}" Background="#2980B9" HorizontalAlignment="Right" Margin="0,0,130,0"/>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="篩選" Command="{Binding ApplyFilterCommand}" 
+                    Style="{StaticResource DarkButtonStyle}" Background="#2980B9" Margin="0,0,10,0"/>
 
-            <!-- 重置按鈕 -->
-            <Button Grid.Row="3" Content="重置篩選" Command="{Binding ResetFilterCommand}" 
-            Style="{StaticResource DarkButtonStyle}" Background="#E74C3C" 
-            HorizontalAlignment="Right" Margin="0,0,10,0"/>
+                <Button Content="重置篩選" Command="{Binding ResetFilterCommand}" 
+                    Style="{StaticResource DarkButtonStyle}" Background="#E74C3C" Margin="0,0,10,0"/>
+
+                <Button Content="刪除記錄" Command="{Binding DeleteRecordCommand}" 
+                    Style="{StaticResource DarkButtonStyle}" Background="#E74C3C" Margin="0,0,10,0"/>
+            </StackPanel>
         </Grid>
 
-        <!-- 記錄數據表格 -->
         <DataGrid Grid.Row="1"
-          x:Name="RecordsDataGrid"
-          ItemsSource="{Binding FilteredDeviceRecords}"
-          SelectedItem="{Binding SelectedRecord}"
-          SelectionMode="Single"
-          AutoGenerateColumns="False"
-          CanUserAddRows="False"
-          IsReadOnly="True"
-          AlternatingRowBackground="AliceBlue"
-          FontSize="18">
+                  x:Name="RecordsDataGrid"
+                  ItemsSource="{Binding FilteredDeviceRecords}"
+                  SelectedItem="{Binding SelectedRecord}"
+                  SelectionMode="Single"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  IsReadOnly="True"
+                  AlternatingRowBackground="AliceBlue"
+                  FontSize="18">
 
             <DataGrid.Columns>
                 <DataGridTextColumn Header="排序" Binding="{Binding RowNumber}" Width="Auto">
@@ -116,42 +139,6 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>
-        
-        <!-- 操作按鈕組 -->
-        <StackPanel Grid.Row="2" 
-                  Orientation="Horizontal" 
-                  Margin="0,15,0,0" 
-                  HorizontalAlignment="Right">
-            <Button Content="添加記錄" 
-                  Command="{Binding AddRecordCommand}" 
-                  Style="{StaticResource DarkButtonStyle}"
-                  Background="#2980B9"
-                  Margin="0,0,10,0"/>
-
-            <Button Content="刪除記錄" 
-                  Command="{Binding DeleteRecordCommand}" 
-                  Style="{StaticResource DarkButtonStyle}"
-                  Background="#E74C3C"
-                  Margin="0,0,10,0"/>
-
-            <Button Content="導出Excel" 
-                  Command="{Binding ExportToExcelCommand}" 
-                  Style="{StaticResource DarkButtonStyle}"
-                  Background="#FF9900"
-                  Margin="0,0,10,0"/>
-            <!--
-            <Button Content="刷新" 
-                  Command="{Binding RefreshCommand}" 
-                  Style="{StaticResource DarkButtonStyle}"
-                  Background="#27AE60"
-                  Margin="0,0,10,0"/>
-
-            <Button Content="關閉" 
-                  Click="CloseButton_Click" 
-                  Style="{StaticResource DarkButtonStyle}"
-                  Background="#C0392B"/>
--->
-        </StackPanel>
 
     </Grid>
 </Window>

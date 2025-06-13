@@ -24,7 +24,7 @@ namespace SANJET.Core.ViewModels
         private readonly ILogger<RecordViewModel> _logger;
         private readonly DeviceViewModel _deviceViewModel;
         private readonly string _currentUsername;
-        private readonly IDataSyncService _dataSyncService;
+
 
         [ObservableProperty]
         private string _recordContent = string.Empty;
@@ -47,14 +47,12 @@ namespace SANJET.Core.ViewModels
             DeviceViewModel deviceViewModel,
             AppDbContext dbContext,
             ILogger<RecordViewModel> logger,
-            string currentUsername,
-            IDataSyncService dataSyncService)
+            string currentUsername)
         {
             _deviceViewModel = deviceViewModel;
             _dbContext = dbContext;
             _logger = logger;
             _currentUsername = currentUsername;
-            _dataSyncService = dataSyncService;
 
             FilteredDeviceRecords = CollectionViewSource.GetDefaultView(DeviceRecords);
             // 【修改】預設排序現在基於包裝類別的 Record.Timestamp 屬性
@@ -121,7 +119,7 @@ namespace SANJET.Core.ViewModels
                 RecordContent = string.Empty;
                 _logger.LogInformation("已為設備 ID: {DeviceId} 添加新紀錄。", _deviceViewModel.Id);
 
-                _ = _dataSyncService.SyncRecordAdditionAsync(newRecord);
+
             }
             catch (Exception ex)
             {
@@ -150,7 +148,7 @@ namespace SANJET.Core.ViewModels
                 // 【修改】刪除後，重新載入整個列表以更新行號
                 await LoadRecordsAsync();
 
-                _ = _dataSyncService.SyncRecordDeletionAsync(recordToDelete.UniqueId);
+
             }
             catch (Exception ex)
             {

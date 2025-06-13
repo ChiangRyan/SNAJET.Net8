@@ -108,8 +108,8 @@ namespace SANJET
                         services.AddSingleton<IMqttBrokerService, MqttBrokerService>();
                         services.AddSingleton<IPollingStateService, PollingStateService>();
                         services.AddSingleton<INavigationService, NavigationService>();
-                        services.AddSingleton<IDataSyncService, DataSyncService>();
                         services.AddSingleton<IAudioService, AudioService>();
+                        services.AddSingleton<IDatabaseManagementService, DatabaseManagementService>();
 
                         services.AddHostedService<MqttClientConnectionService>();
                         services.AddHostedService<ModbusPollingService>();

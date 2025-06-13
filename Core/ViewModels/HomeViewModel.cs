@@ -21,7 +21,6 @@ namespace SANJET.Core.ViewModels
         private readonly AppDbContext _dbContext;
         private readonly ILogger<HomeViewModel> _logger;
         private readonly MainViewModel? _mainViewModel;
-        private readonly IDataSyncService _dataSyncService;
         private readonly IAudioService _audioService;
 
         [ObservableProperty]
@@ -33,12 +32,10 @@ namespace SANJET.Core.ViewModels
         public HomeViewModel(
             AppDbContext dbContext, 
             ILogger<HomeViewModel> logger,
-            IDataSyncService dataSyncService,
             IAudioService audioService)
         {
             _dbContext = dbContext;
             _logger = logger;
-            _dataSyncService = dataSyncService;
             _audioService = audioService;
             _mainViewModel = App.Host?.Services.GetService<MainViewModel>();
         }
@@ -88,13 +85,7 @@ namespace SANJET.Core.ViewModels
                 _dbContext.Devices.Update(deviceInDb);
                 await _dbContext.SaveChangesAsync();
 
-                // ===== 新增呼叫同步服務的程式碼 =====
-                if (_dataSyncService != null)
-                {
-                    // 將更新後的實體傳遞給同步服務
-                    await _dataSyncService.SyncDeviceChangeAsync(deviceInDb);
-                }
-                // ===================================
+                
 
                 deviceVm.OriginalName = deviceVm.Name;
                 _logger.LogInformation("已保存設備 ID {DeviceId} 的變更。", deviceVm.Id);
@@ -389,12 +380,12 @@ namespace SANJET.Core.ViewModels
                 var dbContext = provider.GetRequiredService<AppDbContext>();
                 var recordLogger = provider.GetRequiredService<ILogger<RecordViewModel>>();
                 var authService = provider.GetRequiredService<IAuthenticationService>();
-                var dataSyncService = provider.GetRequiredService<IDataSyncService>();
+
 
                 var currentUser = authService.GetCurrentUser()?.Username ?? "未知使用者";
 
                 // 1. 建立 RecordViewModel，並傳入同步服務
-                var recordViewModel = new RecordViewModel(this, dbContext, recordLogger, currentUser, dataSyncService);
+                var recordViewModel = new RecordViewModel(this, dbContext, recordLogger, currentUser);
 
                 // 2. 建立 RecordWindow
                 var recordWindow = new RecordWindow(recordViewModel)

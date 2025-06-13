@@ -3,11 +3,33 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:SANJET.UI.Views.Pages"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
       Title="SettingsPage">
+    <Grid Margin="20">
+        <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top">
+            <TextBlock Text="{Binding PageTitle}" FontSize="24" FontWeight="Bold" Margin="0,0,0,20" />
 
-    <Grid>
-        <TextBlock Text="歡迎來到設定頁" FontSize="100" HorizontalAlignment="Center" VerticalAlignment="Center" Background="Red"/>
+            <GroupBox Header="資料庫管理" Padding="10" MinWidth="300">
+                <StackPanel>
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                        您可以在此處備份應用程式的本地資料庫，或從先前的備份檔案還原。
+                        <LineBreak/>
+                        <Run FontWeight="Bold">注意：</Run>還原操作會覆蓋現有資料並重啟應用程式。
+                    </TextBlock>
+
+                    <Button Content="備份資料庫..." 
+                            Command="{Binding BackupDatabaseCommand}" 
+                            Margin="0,5" Padding="10,5"/>
+
+                    <Button Content="從備份還原..." 
+                            Command="{Binding RestoreDatabaseCommand}" 
+                            Margin="0,5" Padding="10,5"
+                            Background="OrangeRed"/>
+                </StackPanel>
+            </GroupBox>
+
+        </StackPanel>
     </Grid>
 </Page>
