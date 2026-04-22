@@ -208,6 +208,33 @@
                             <!-- 新增紀錄按鈕 -->
                             <Button Content="紀錄" Command="{Binding RecordCommand}" Style="{StaticResource RecordButtonStyle}" 
                                     Margin="0,10,0,0" HorizontalAlignment="Center"/>
+
+                            <!-- 編輯模式：輸入新的運轉次數 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,5"
+                                Visibility="{Binding IsEditingRunCount, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                HorizontalAlignment="Center">
+                                <TextBlock Text="設置運轉次數: " Style="{StaticResource MyTextBlockStyle}"/>
+                                <TextBox Text="{Binding EditingRunCountText, UpdateSourceTrigger=PropertyChanged}" 
+                                         FontSize="16" 
+                                         Width="60" 
+                                         VerticalAlignment="Center"/>
+                                <Button Content="確認" 
+                                        Command="{Binding SaveRunCountCommand}" 
+                                        Style="{StaticResource SaveButtonStyle}"/>
+                                <Button Content="取消" 
+                                        Command="{Binding CancelEditRunCountCommand}" 
+                                        Style="{StaticResource CancelButtonStyle}"/>
+                            </StackPanel>
+
+                            <!-- 編輯按鈕 -->
+                            <Button Content="修改運轉次數" 
+                                    Command="{Binding EditRunCountCommand}" 
+                                    Style="{StaticResource EditButtonStyle}"
+                                    Width="120"
+                                    Margin="0,5,0,0"
+                                    HorizontalAlignment="Center"
+                                    Visibility="{Binding IsEditingRunCount, Converter={StaticResource BooleanInverterConverter}}"
+                                    IsEnabled="{Binding DataContext.CanControlDevice, RelativeSource={RelativeSource AncestorType=Page}}"/>
                         </StackPanel>
 
                     </Border>

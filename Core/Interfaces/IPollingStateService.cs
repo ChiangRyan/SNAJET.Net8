@@ -27,5 +27,11 @@ namespace SANJET.Core.Interfaces
         /// 禁用輪詢。
         /// </summary>
         void DisablePolling();
+
+        /// <summary>
+        /// 暫時禁用輪詢指定毫秒數。此方法用於防止輪詢在寫入命令後立即覆蓋新值。
+        /// </summary>
+        /// <param name="durationMilliseconds">暫停輪詢的時間（毫秒）</param>
+        Task PausePollingAsync(int durationMilliseconds);
     }
 }

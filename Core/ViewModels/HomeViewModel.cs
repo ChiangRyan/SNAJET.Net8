@@ -23,6 +23,9 @@ namespace SANJET.Core.ViewModels
         private readonly MainViewModel? _mainViewModel;
         private readonly IAudioService _audioService;
 
+        // 暴露 DbContext 供 DeviceViewModel 使用
+        public AppDbContext DbContext => _dbContext;
+
         [ObservableProperty]
         private ObservableCollection<DeviceViewModel> devices = new();
 
@@ -225,6 +228,12 @@ namespace SANJET.Core.ViewModels
         private const ushort MODBUS_VALUE_START = 1;
         private const ushort MODBUS_VALUE_STOP = 0;
 
+        [ObservableProperty]
+        private bool isEditingRunCount = false; // 是否處於編輯 RunCount 的狀態
+
+        [ObservableProperty]
+        private string editingRunCountText = string.Empty; // 編輯時的 RunCount 文本
+
         public DeviceViewModel(HomeViewModel homeViewModel, MainViewModel? mainViewModel, ILogger? logger, IAudioService? audioService)
         {
             _homeViewModel = homeViewModel;
@@ -357,6 +366,101 @@ namespace SANJET.Core.ViewModels
             {
                 Status = "停止命令發送失敗";
             }
+        }
+
+        [RelayCommand]
+        private void EditRunCount()
+        {
+            EditingRunCountText = RunCount.ToString();
+            IsEditingRunCount = true;
+        }
+
+        [RelayCommand]
+        private async Task SaveRunCountAsync()
+        {
+            if (_mainViewModel == null || string.IsNullOrEmpty(ControllingEsp32MqttId))
+            {
+                MessageBox.Show("通訊服務或目標 ESP32 ID 未設定。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            if (SlaveId <= 0)
+            {
+                MessageBox.Show("無效的 Slave ID。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // 驗證輸入
+            if (!int.TryParse(EditingRunCountText, out int newRunCount) || newRunCount < 0)
+            {
+                MessageBox.Show("請輸入有效的非負整數。", "輸入錯誤", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // 確認對話框
+            var result = MessageBox.Show(
+                $"確定要將設備 '{Name}' 的運轉次數設置為 {newRunCount} 嗎？\n\n目前運轉次數: {RunCount}",
+                "確認設置運轉次數",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                IsEditingRunCount = false;
+                return;
+            }
+
+            Status = "設置運轉次數中...";
+            bool success = await _mainViewModel.SendModbusWriteRunCountCommandAsync(
+                ControllingEsp32MqttId,
+                (byte)SlaveId,
+                newRunCount);
+
+            if (success)
+            {
+                _logger?.LogInformation("已為設備 '{DeviceName}' (Slave ID {SlaveId}, ESP32: {Esp32Id}) 發送運轉次數設置命令，目標值: {TargetRunCount}。", Name, SlaveId, ControllingEsp32MqttId, newRunCount);
+
+                // 更新本地 UI
+                RunCount = newRunCount;
+                IsEditingRunCount = false;
+
+                // 同時更新資料庫，避免後續輪詢時被舊值覆蓋
+                if (_homeViewModel != null)
+                {
+                    try
+                    {
+                        var deviceInDb = await _homeViewModel.DbContext.Devices.FindAsync(Id);
+                        if (deviceInDb != null)
+                        {
+                            deviceInDb.RunCount = newRunCount;
+                            deviceInDb.Timestamp = DateTime.UtcNow;
+                            await _homeViewModel.DbContext.SaveChangesAsync();
+                            _logger?.LogInformation("資料庫已同步更新：設備 '{DeviceName}' (ID: {DeviceId}) 的運轉次數已設置為 {NewRunCount}。", Name, Id, newRunCount);
+                            Status = "運轉次數已設置";
+                        }
+                    }
+                    catch (Exception dbEx)
+                    {
+                        _logger?.LogError(dbEx, "更新資料庫運轉次數失敗，設備 '{DeviceName}' (ID: {DeviceId})。", Name, Id);
+                        Status = "運轉次數已設置，但資料庫同步失敗";
+                    }
+                }
+                else
+                {
+                    Status = "運轉次數已設置";
+                }
+            }
+            else
+            {
+                Status = "設置運轉次數失敗";
+                _logger?.LogError("無法為設備 '{DeviceName}' (Slave ID {SlaveId}) 設置運轉次數。", Name, SlaveId);
+            }
+        }
+
+        [RelayCommand]
+        private void CancelEditRunCount()
+        {
+            IsEditingRunCount = false;
+            EditingRunCountText = string.Empty;
         }
 
         [RelayCommand]
