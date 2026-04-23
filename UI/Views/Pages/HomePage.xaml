@@ -4,6 +4,7 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:vm="clr-namespace:SANJET.Core.ViewModels"
+      xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
       mc:Ignorable="d"
       Title="Home" d:DesignHeight="450" d:DesignWidth="800"
       KeepAlive="True">
@@ -111,7 +112,35 @@
         </Style>
     </Page.Resources>
 
-    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <GroupBox Header="TAPO C500 即時畫面" Margin="8" Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DockPanel LastChildFill="True" Margin="0,0,0,8">
+                    <TextBlock Text="RTSP URL:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="RtspUrlTextBox" MinWidth="500" Text="" VerticalAlignment="Center"/>
+                </DockPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="連線" Width="80" Margin="0,0,8,0" Click="ConnectCameraButton_Click"/>
+                    <Button Content="停止" Width="80" Click="StopCameraButton_Click"/>
+                    <TextBlock x:Name="CameraStatusTextBlock" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="DimGray" Text="尚未連線"/>
+                </StackPanel>
+                <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" CornerRadius="4" MinHeight="240">
+                    <vlc:VideoView x:Name="CameraVideoView"/>
+                </Border>
+            </Grid>
+        </GroupBox>
+
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <ItemsControl ItemsSource="{Binding Devices}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -242,4 +271,5 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
     </ScrollViewer>
+    </Grid>
 </Page>

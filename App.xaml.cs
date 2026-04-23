@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SANJET.Core;
 using SANJET.Core.Interfaces;
 using SANJET.Core.Models;
@@ -68,6 +69,7 @@ namespace SANJET
                     .ConfigureServices((context, services) =>
                     {
                         services.AddLogging(configure => configure.AddDebug().SetMinimumLevel(LogLevel.Debug));
+                        services.Configure<CameraSettings>(context.Configuration.GetSection("CameraSettings"));
                         services.AddDbContext<AppDbContext>(options =>
                             options.UseSqlite(context.Configuration.GetConnectionString("LocalConnection")));
 
