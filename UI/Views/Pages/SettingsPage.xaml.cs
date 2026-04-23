@@ -3,13 +3,15 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using LibVlcMedia = LibVLCSharp.Shared.Media;
+using LibVlcMediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace SANJET.UI.Views.Pages
 {
     public partial class SettingsPage : Page
     {
         private LibVLC? _libVlc;
-        private MediaPlayer? _mediaPlayer;
+        private LibVlcMediaPlayer? _mediaPlayer;
 
         public SettingsPage()
         {
@@ -25,9 +27,9 @@ namespace SANJET.UI.Views.Pages
                 return;
             }
 
-            Core.Initialize();
+            LibVLCSharp.Shared.Core.Initialize();
             _libVlc = new LibVLC("--network-caching=300", "--rtsp-tcp");
-            _mediaPlayer = new MediaPlayer(_libVlc);
+            _mediaPlayer = new LibVlcMediaPlayer(_libVlc);
             RtspVideoView.MediaPlayer = _mediaPlayer;
 
             RtspStatusTextBlock.Text = "狀態：播放器已就緒";
@@ -36,7 +38,9 @@ namespace SANJET.UI.Views.Pages
 
         private void StartRtspButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_mediaPlayer == null || _libVlc == null)
+            var mediaPlayer = _mediaPlayer;
+            var libVlc = _libVlc;
+            if (mediaPlayer is null || libVlc is null)
             {
                 RtspStatusTextBlock.Text = "狀態：播放器初始化失敗";
                 RtspStatusTextBlock.Foreground = Brushes.Red;
@@ -53,8 +57,8 @@ namespace SANJET.UI.Views.Pages
 
             try
             {
-                using var media = new Media(_libVlc, new Uri(rtspUrl));
-                _mediaPlayer.Play(media);
+                using var media = new LibVlcMedia(libVlc, new Uri(rtspUrl));
+                mediaPlayer.Play(media);
                 RtspStatusTextBlock.Text = "狀態：連線中...";
                 RtspStatusTextBlock.Foreground = Brushes.DodgerBlue;
             }
