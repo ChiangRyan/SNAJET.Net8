@@ -647,7 +647,6 @@ namespace SANJET.Core.ViewModels
             catch (Exception ex)
             {
                 _logger.LogError(ex, "導航到首頁時發生錯誤。");
-
             }
         }
 
