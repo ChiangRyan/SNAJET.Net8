@@ -458,8 +458,8 @@ namespace SANJET.Core.ViewModels
 
                 // 發送寫入命令後，暫停輪詢以防止輪詢讀取覆蓋新寫入的值
                 // 暫停時間應長於 ESP32 處理寫入命令的時間（預估 2 秒）
-                _logger.LogInformation("發送寫入命令後，暫停輪詢 5 秒以防止輪詢讀取覆蓋新值。");
-                _ = _pollingStateService.PausePollingAsync(5000); // 暫停 5 秒（fire-and-forget）
+                //_logger.LogInformation("發送寫入命令後，暫停輪詢 5 秒以防止輪詢讀取覆蓋新值。");
+                //_ = _pollingStateService.PausePollingAsync(5000); // 暫停 5 秒（fire-and-forget）
 
                 return true;
             }
@@ -647,7 +647,6 @@ namespace SANJET.Core.ViewModels
             catch (Exception ex)
             {
                 _logger.LogError(ex, "導航到首頁時發生錯誤。");
-
             }
         }
 
