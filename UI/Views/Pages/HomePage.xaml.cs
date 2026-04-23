@@ -33,8 +33,6 @@ namespace SANJET.UI.Views.Pages
                 return;
             }
 
-            Core.Initialize();
-
             _libVlc = _cameraSettings.EnableHardwareDecoding
                 ? new LibVLC("--avcodec-hw=d3d11va")
                 : new LibVLC();
