@@ -36,9 +36,6 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.11" />
     <PackageReference Include="System.Speech" Version="9.0.6" />
-    <PackageReference Include="LibVLCSharp" Version="3.8.5" />
-    <PackageReference Include="LibVLCSharp.WPF" Version="3.8.5" />
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
   </ItemGroup>
 
   <ItemGroup>
