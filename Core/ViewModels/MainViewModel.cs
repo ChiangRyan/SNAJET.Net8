@@ -455,70 +455,12 @@ namespace SANJET.Core.ViewModels
             {
                 await _mqttService.PublishAsync(commandTopic, jsonPayload);
                 _logger.LogInformation("已發送 Modbus Write 命令到 {Topic} (SlaveID: {SlaveId}): {Payload}", commandTopic, slaveId, jsonPayload);
-
-                // 發送寫入命令後，暫停輪詢以防止輪詢讀取覆蓋新寫入的值
-                // 暫停時間應長於 ESP32 處理寫入命令的時間（預估 2 秒）
-                _logger.LogInformation("發送寫入命令後，暫停輪詢 5 秒以防止輪詢讀取覆蓋新值。");
-                _ = _pollingStateService.PausePollingAsync(5000); // 暫停 5 秒（fire-and-forget）
-
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "發送 MQTT Modbus Write 命令失敗到 {Topic} (SlaveID: {SlaveId})", commandTopic, slaveId);
                 MessageBox.Show($"無法發送 Modbus 命令到 ESP32 {targetEsp32MqttId} (SlaveID: {slaveId})，請檢查 MQTT 連線。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
-            }
-        }
-
-        public async Task<bool> SendModbusWriteRunCountCommandAsync(string? targetEsp32MqttId, byte slaveId, int runCountValue)
-        {
-            if (string.IsNullOrEmpty(targetEsp32MqttId))
-            {
-                _logger.LogWarning("SendModbusWriteRunCountCommandAsync: targetEsp32MqttId 不可為空。");
-                return false;
-            }
-
-            if (!IsLoggedIn || !CanControlDevice)
-            {
-                _logger.LogWarning("SendModbusWriteRunCountCommandAsync: 未登入或無權限控制設備。");
-                MessageBox.Show("未登入或無權限執行 Modbus 操作。", "權限錯誤", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
-            }
-
-            // 將 32 位的 RunCount 分成兩個 16 位的字
-            uint unsignedValue = (uint)runCountValue;
-            ushort word0 = (ushort)(unsignedValue & 0xFFFF);        // LSW (低位字)
-            ushort word1 = (ushort)((unsignedValue >> 16) & 0xFFFF); // MSW (高位字)
-
-            var modbusWriteRunCountPayload = new
-            {
-                slaveId = slaveId,
-                address = ModbusConstants.RunCountRelativeAddress,
-                quantity = 2,
-                values = new[] { word0, word1 }
-            };
-            string jsonPayload = JsonSerializer.Serialize(modbusWriteRunCountPayload);
-            string commandTopic = $"devices/{targetEsp32MqttId}/modbus/write/request";
-
-            try
-            {
-                _logger.LogInformation("正在發送 Modbus Write RunCount 命令到 {Topic} (SlaveID: {SlaveId}, RunCount: {RunCount}, Word0: {Word0_Hex}, Word1: {Word1_Hex}): {Payload}",
-                                     commandTopic, slaveId, runCountValue, word0.ToString("X4"), word1.ToString("X4"), jsonPayload);
-                await _mqttService.PublishAsync(commandTopic, jsonPayload);
-                _logger.LogInformation("已成功發送 Modbus Write RunCount 命令到 {Topic} (SlaveID: {SlaveId}, RunCount: {RunCount})", commandTopic, slaveId, runCountValue);
-
-                // 發送寫入命令後，暫停輪詢以防止輪詢讀取覆蓋新寫入的值
-                // 暫停時間應長於 ESP32 處理寫入命令的時間（預估 2 秒）
-                _logger.LogInformation("發送 RunCount 寫入命令後，暫停輪詢 5 秒以防止輪詢讀取覆蓋新值。");
-                _ = _pollingStateService.PausePollingAsync(5000); // 暫停 5 秒（fire-and-forget）
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "發送 MQTT Modbus Write RunCount 命令失敗到 {Topic} (SlaveID: {SlaveId}, RunCount: {RunCount})", commandTopic, slaveId, runCountValue);
-                MessageBox.Show($"無法發送 Modbus RunCount 命令到 ESP32 {targetEsp32MqttId} (SlaveID: {slaveId})，請檢查 MQTT 連線。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
         }
