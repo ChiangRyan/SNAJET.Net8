@@ -4,7 +4,6 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:vm="clr-namespace:SANJET.Core.ViewModels"
-      xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
       mc:Ignorable="d"
       Title="Home" d:DesignHeight="450" d:DesignWidth="800"
       KeepAlive="True">
@@ -112,35 +111,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <GroupBox Header="TAPO C500 即時畫面" Margin="8" Padding="8">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <DockPanel LastChildFill="True" Margin="0,0,0,8">
-                    <TextBlock Text="RTSP URL:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBox x:Name="RtspUrlTextBox" MinWidth="500" Text="" VerticalAlignment="Center"/>
-                </DockPanel>
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Content="連線" Width="80" Margin="0,0,8,0" Click="ConnectCameraButton_Click"/>
-                    <Button Content="停止" Width="80" Click="StopCameraButton_Click"/>
-                    <TextBlock x:Name="CameraStatusTextBlock" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="DimGray" Text="尚未連線"/>
-                </StackPanel>
-                <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" CornerRadius="4" MinHeight="240">
-                    <vlc:VideoView x:Name="CameraVideoView"/>
-                </Border>
-            </Grid>
-        </GroupBox>
-
-    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
         <ItemsControl ItemsSource="{Binding Devices}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -200,15 +171,18 @@
 
                                 <Button Content="修改" 
                                     Command="{Binding EditNameCommand}" 
+                                    CommandParameter="{Binding SlaveId}"
                                     Style="{StaticResource EditButtonStyle}" 
                                     Visibility="{Binding IsEditingName, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
                                     IsEnabled="{Binding DataContext.CanControlDevice, RelativeSource={RelativeSource AncestorType=Page}}"/>
                                 <Button Content="保存" 
                                     Command="{Binding SaveNameCommand}" 
+                                    CommandParameter="{Binding SlaveId}"
                                     Style="{StaticResource SaveButtonStyle}" 
                                     Visibility="{Binding IsEditingName, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 <Button Content="取消" 
                                     Command="{Binding CancelEditNameCommand}" 
+                                    CommandParameter="{Binding SlaveId}"
                                     Style="{StaticResource CancelButtonStyle}" 
                                     Visibility="{Binding IsEditingName, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                             </StackPanel>
@@ -225,17 +199,19 @@
                                 <Button Content="啟動" 
                                         x:Name="Start"
                                         Command="{Binding StartCommand}" 
+                                        CommandParameter="{Binding SlaveId}"
                                         Style="{StaticResource StartButtonStyle}"
                                         />
                                 <Button Content="停止" 
                                         Command="{Binding StopCommand}" 
+                                        CommandParameter="{Binding SlaveId}"
                                         Style="{StaticResource StopButtonStyle}"
                                         />
                                 
                             </StackPanel>
 
                             <!-- 新增紀錄按鈕 -->
-                            <Button Content="紀錄" Command="{Binding RecordCommand}" Style="{StaticResource RecordButtonStyle}" 
+                            <Button Content="紀錄" Command="{Binding RecordCommand}" CommandParameter="{Binding SlaveId}" Style="{StaticResource RecordButtonStyle}" 
                                     Margin="0,10,0,0" HorizontalAlignment="Center"/>
 
                             <!-- 編輯模式：輸入新的運轉次數 -->
@@ -249,15 +225,18 @@
                                          VerticalAlignment="Center"/>
                                 <Button Content="確認" 
                                         Command="{Binding SaveRunCountCommand}" 
+                                        CommandParameter="{Binding SlaveId}"
                                         Style="{StaticResource SaveButtonStyle}"/>
                                 <Button Content="取消" 
                                         Command="{Binding CancelEditRunCountCommand}" 
+                                        CommandParameter="{Binding SlaveId}"
                                         Style="{StaticResource CancelButtonStyle}"/>
                             </StackPanel>
 
                             <!-- 編輯按鈕 -->
                             <Button Content="修改運轉次數" 
                                     Command="{Binding EditRunCountCommand}" 
+                                    CommandParameter="{Binding SlaveId}"
                                     Style="{StaticResource EditButtonStyle}"
                                     Width="120"
                                     Margin="0,5,0,0"
@@ -271,5 +250,4 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
     </ScrollViewer>
-    </Grid>
 </Page>

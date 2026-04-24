@@ -1,14 +1,16 @@
-﻿<Page x:Class="SANJET.UI.Views.Pages.SettingsPage"
+<Page x:Class="SANJET.UI.Views.Pages.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:SANJET.UI.Views.Pages"
-      mc:Ignorable="d" 
-      d:DesignHeight="450" d:DesignWidth="800"
+      xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+      mc:Ignorable="d"
+      d:DesignHeight="450"
+      d:DesignWidth="800"
       Title="SettingsPage">
-    <Grid Margin="20">
-        <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" HorizontalAlignment="Left" VerticalAlignment="Top">
             <TextBlock Text="{Binding PageTitle}" FontSize="24" FontWeight="Bold" Margin="0,0,0,20" />
 
             <GroupBox Header="資料庫管理" Padding="10" MinWidth="300">
@@ -19,17 +21,54 @@
                         <Run FontWeight="Bold">注意：</Run>還原操作會覆蓋現有資料並重啟應用程式。
                     </TextBlock>
 
-                    <Button Content="備份資料庫..." 
-                            Command="{Binding BackupDatabaseCommand}" 
-                            Margin="0,5" Padding="10,5"/>
+                    <Button Content="備份資料庫..."
+                            Command="{Binding BackupDatabaseCommand}"
+                            Margin="0,5"
+                            Padding="10,5"/>
 
-                    <Button Content="從備份還原..." 
-                            Command="{Binding RestoreDatabaseCommand}" 
-                            Margin="0,5" Padding="10,5"
+                    <Button Content="從備份還原..."
+                            Command="{Binding RestoreDatabaseCommand}"
+                            Margin="0,5"
+                            Padding="10,5"
                             Background="OrangeRed"/>
                 </StackPanel>
             </GroupBox>
 
+            <GroupBox Header="RTSP 影像串流" Padding="10" MinWidth="700" Margin="0,20,0,0">
+                <StackPanel>
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                        請輸入 RTSP 位址後點擊「開始串流」。
+                    </TextBlock>
+
+                    <TextBox x:Name="RtspUrlTextBox"
+                             Text="rtsp://SANJET:Sanjet25653819@192.168.98.190"
+                             Margin="0,0,0,10"
+                             Padding="8"
+                             MinWidth="640"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Content="開始串流"
+                                Width="120"
+                                Margin="0,0,10,0"
+                                Padding="10,5"
+                                Click="StartRtspButton_Click"/>
+                        <Button Content="停止串流"
+                                Width="120"
+                                Padding="10,5"
+                                Click="StopRtspButton_Click"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="RtspStatusTextBlock"
+                               Text="狀態：尚未連線"
+                               Margin="0,0,0,10"
+                               Foreground="Gray"/>
+
+                    <Border Width="640" Height="360" BorderBrush="Gray" BorderThickness="1">
+                        <vlc:VideoView x:Name="RtspVideoView"/>
+                    </Border>
+                </StackPanel>
+            </GroupBox>
+
         </StackPanel>
-    </Grid>
+    </ScrollViewer>
 </Page>

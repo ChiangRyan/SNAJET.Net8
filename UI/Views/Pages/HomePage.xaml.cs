@@ -1,7 +1,4 @@
-using LibVLCSharp.Shared;
-using Microsoft.Extensions.Options;
-using SANJET.Core.Models;
-using System;
+﻿
 using System.Windows;
 using System.Windows.Controls;
 
@@ -9,10 +6,6 @@ namespace SANJET.UI.Views.Pages
 {
     public partial class HomePage : Page
     {
-        private LibVLC? _libVlc;
-        private MediaPlayer? _mediaPlayer;
-        private readonly CameraSettings _cameraSettings;
-
         public HomePage()
         {
             InitializeComponent();
