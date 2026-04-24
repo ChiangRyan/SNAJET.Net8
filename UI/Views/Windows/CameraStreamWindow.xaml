@@ -1,0 +1,34 @@
+<Window x:Class="SANJET.UI.Views.Windows.CameraStreamWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        Title="攝影機監控" 
+        Width="1000" 
+        Height="750"
+        WindowStartupLocation="CenterScreen"
+        Background="#1A1A1A">
+
+    <Grid>
+        <!-- 仅显示视频流 -->
+        <Border Background="#000000" CornerRadius="8" Margin="10">
+            <Grid>
+                <vlc:VideoView x:Name="CameraVideoView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+
+                <!-- 状态指示器（左上角） -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Left" 
+                        Background="#AA000000" CornerRadius="6" Padding="12,8" Margin="15">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="StatusIndicator" Width="10" Height="10" Fill="#4CAF50" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="CameraStatusTextBlock" Text="狀態：準備就緒" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 摄像头ID显示（右上角） -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Right" 
+                        Background="#AA000000" CornerRadius="6" Padding="12,8" Margin="15">
+                    <TextBlock x:Name="CameraIdTextBlock" Text="攝影機 1" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
